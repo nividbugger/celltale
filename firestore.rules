@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read:   if request.auth.uid == userId || isAdmin();
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId || isAdmin();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read:   if request.auth.uid == resource.data.patientId || isAdmin();
+      allow create: if request.auth != null
+                    && request.resource.data.patientId == request.auth.uid;
+      allow update: if isAdmin()
+                    || (request.auth.uid == resource.data.patientId
+                        && request.resource.data.status == 'Cancelled');
+      allow delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read:  if request.auth.uid == resource.data.patientId || isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}
