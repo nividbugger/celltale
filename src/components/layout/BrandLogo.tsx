@@ -1,5 +1,6 @@
-import { Activity } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import logo from '../../assets/logo.png'
+import logo2x from '../../assets/logo@2x.png'
 
 interface BrandLogoProps {
   size?: 'sm' | 'md' | 'lg'
@@ -7,24 +8,23 @@ interface BrandLogoProps {
 }
 
 export function BrandLogo({ size = 'md', white = false }: BrandLogoProps) {
-  const sizes = {
-    sm: { icon: 'h-5 w-5', text: 'text-lg' },
-    md: { icon: 'h-6 w-6', text: 'text-xl' },
-    lg: { icon: 'h-8 w-8', text: 'text-2xl' },
+  const heights = {
+    sm: 'h-16',
+    md: 'h-20',
+    lg: 'h-28',
   }
 
   return (
-    <Link to="/" className="flex items-center gap-2 select-none">
-      <div className={`gradient-bg p-1.5 rounded-xl ${white ? 'opacity-90' : ''}`}>
-        <Activity className={`${sizes[size].icon} text-white`} />
-      </div>
-      <span
-        className={`font-extrabold tracking-tight ${sizes[size].text} ${
-          white ? 'text-white' : 'gradient-text'
-        }`}
-      >
-        Cell Tale
-      </span>
+    <Link to="/" className="flex items-center select-none">
+      <img
+        src={logo}
+        srcSet={`${logo} 1x, ${logo2x} 2x`}
+        alt="Cell Tale Diagnostics"
+        width={366}
+        height={151}
+        className={`${heights[size]} w-auto object-contain`}
+        style={{ imageRendering: 'auto' }}
+      />
     </Link>
   )
 }

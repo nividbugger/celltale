@@ -3,6 +3,7 @@ import {
   setDoc,
   getDoc,
   updateDoc,
+  deleteDoc,
   collection,
   addDoc,
   query,
@@ -15,7 +16,7 @@ import {
   getCountFromServer,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { User, Appointment, AppointmentStatus, Report, TestValue } from '../types'
+import type { User, Appointment, AppointmentStatus, Report, TestValue, Package } from '../types'
 
 // ─── Users ────────────────────────────────────────────────────────────────
 
@@ -155,6 +156,28 @@ export async function getAdminStats(): Promise<{
     totalPatients: patientsSnap.data().count,
     reportsUploaded: reportsSnap.data().count,
   }
+}
+
+// ─── Packages ────────────────────────────────────────────────────────────
+
+export async function getAllPackages(): Promise<Package[]> {
+  const q = query(collection(db, 'packages'), orderBy('order', 'asc'))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ ...d.data() } as Package))
+}
+
+export async function savePackage(pkg: Package): Promise<void> {
+  await setDoc(doc(db, 'packages', pkg.id), pkg)
+}
+
+export async function deletePackage(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'packages', id))
+}
+
+export async function reorderPackages(packages: Package[]): Promise<void> {
+  await Promise.all(
+    packages.map((pkg, i) => setDoc(doc(db, 'packages', pkg.id), { ...pkg, order: i })),
+  )
 }
 
 // Re-export Timestamp for convenience

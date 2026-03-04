@@ -53,14 +53,16 @@ export default function AdminUploadReportPage() {
         const pkg = PACKAGES.find((p) => p.id === appt.packageId)
         if (pkg) {
           replace(
-            pkg.tests.map((t) => ({
-              category: pkg.name,
-              name: t,
-              value: '',
-              unit: '',
-              normalRange: '',
-              isAbnormal: false,
-            })),
+            pkg.details.flatMap((d) =>
+              d.text.split(', ').map((t) => ({
+                category: d.category,
+                name: t.trim(),
+                value: '',
+                unit: '',
+                normalRange: '',
+                isAbnormal: false,
+              })),
+            ),
           )
         }
       }
