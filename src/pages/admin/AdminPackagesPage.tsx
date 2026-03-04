@@ -377,16 +377,22 @@ export default function AdminPackagesPage() {
   const navigate = useNavigate()
   const [packages, setPackages] = useState<Package[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [seeding, setSeeding] = useState(false)
+  const [seedError, setSeedError] = useState<string | null>(null)
   const [editPkg, setEditPkg] = useState<Package | 'new' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Package | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   async function load() {
     setLoading(true)
+    setLoadError(null)
     try {
       const pkgs = await getAllPackages()
       setPackages(pkgs)
+    } catch (err: any) {
+      console.error('Failed to load packages:', err)
+      setLoadError(err?.message ?? 'Failed to load packages. Check Firestore rules and console.')
     } finally {
       setLoading(false)
     }
@@ -401,9 +407,15 @@ export default function AdminPackagesPage() {
 
   async function handleSeed() {
     setSeeding(true)
+    setSeedError(null)
     try {
-      await Promise.all(STATIC_PACKAGES.map((p) => savePackage(p)))
+      for (const p of STATIC_PACKAGES) {
+        await savePackage(p)
+      }
       await load()
+    } catch (err: any) {
+      console.error('Seed failed:', err)
+      setSeedError(err?.message ?? 'Seed failed. Check Firestore rules and console.')
     } finally {
       setSeeding(false)
     }
@@ -488,6 +500,18 @@ export default function AdminPackagesPage() {
             </Button>
           </div>
         </div>
+
+        {/* Errors */}
+        {loadError && (
+          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <strong>Load error:</strong> {loadError}
+          </div>
+        )}
+        {seedError && (
+          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <strong>Seed error:</strong> {seedError}
+          </div>
+        )}
 
         {/* Package list */}
         {loading ? (

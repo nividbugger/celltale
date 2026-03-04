@@ -26,5 +26,10 @@ service cloud.firestore {
       allow read:  if request.auth.uid == resource.data.patientId || isAdmin();
       allow write: if isAdmin();
     }
+
+    match /packages/{packageId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
   }
 }
