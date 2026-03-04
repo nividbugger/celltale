@@ -1,14 +1,18 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { CheckCircle, Clock, Award, ArrowRight, Star, FlaskConical } from 'lucide-react'
+import { CheckCircle, Clock, Award, ArrowRight, Star, FlaskConical, ChevronDown, ChevronUp, Stethoscope } from 'lucide-react'
 import { Navbar } from '../../components/layout/Navbar'
 import { Footer } from '../../components/layout/Footer'
 import { Button } from '../../components/ui/Button'
-import { PACKAGES } from '../../types'
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { usePackages } from '../../hooks/usePackages'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function LandingPage() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
+  const [expandedPkg, setExpandedPkg] = useState<string | null>(null)
+  const { packages, loading: pkgsLoading } = usePackages()
 
   function handleBookNow() {
     navigate(currentUser ? '/dashboard/book' : '/register')
@@ -98,38 +102,95 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {PACKAGES.map((pkg) => (
-              <div
-                key={pkg.id}
-                className={`relative bg-white rounded-3xl border shadow-sm p-6 flex flex-col ${
-                  pkg.popular ? 'border-teal-300 ring-2 ring-teal-200' : 'border-slate-100'
-                }`}
-              >
-                {pkg.popular && (
-                  <span className="absolute -top-3 left-6 gradient-bg text-white text-xs font-bold px-3 py-1 rounded-full">
-                    Most Popular
-                  </span>
-                )}
-                <div className="mb-4">
-                  <h3 className="font-bold text-slate-900 text-lg">{pkg.name}</h3>
-                  <p className="text-slate-500 text-sm mt-1">{pkg.description}</p>
+            {pkgsLoading ? (
+              <div className="col-span-3"><LoadingSpinner className="py-12" /></div>
+            ) : packages.map((pkg) => {
+              const isExpanded = expandedPkg === pkg.id
+              return (
+                <div
+                  key={pkg.id}
+                  className={`relative rounded-3xl border shadow-sm flex flex-col ${pkg.color} ${
+                    pkg.isPopular ? 'ring-2 ring-blue-300' : ''
+                  }`}
+                >
+                  {pkg.isPopular && (
+                    <span className="absolute -top-3 left-6 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                      Most Popular
+                    </span>
+                  )}
+
+                  {/* Header */}
+                  <div className="p-6 pb-4">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <h3 className={`font-extrabold text-lg leading-tight ${pkg.headerColor}`}>
+                        {pkg.name}
+                      </h3>
+                      <span className="text-xs font-semibold bg-slate-100 text-slate-600 rounded-full px-2.5 py-1 shrink-0">
+                        {pkg.testCount} tests
+                      </span>
+                    </div>
+
+                    {/* Price */}
+                    <div className="text-3xl font-extrabold text-slate-900 mb-4">
+                      ₹{pkg.price}
+                      <span className="text-sm font-normal text-slate-500 ml-1">/ person</span>
+                    </div>
+
+                    {/* Consultations */}
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {pkg.consultations.map((c) => (
+                        <span key={c} className="inline-flex items-center gap-1 text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200 rounded-full px-2.5 py-0.5">
+                          <Stethoscope className="h-3 w-3" /> {c}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Summary */}
+                    <ul className="space-y-1.5 mb-4">
+                      {pkg.summary.map((item) => (
+                        <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
+                          <CheckCircle className="h-3.5 w-3.5 text-teal-500 shrink-0 mt-0.5" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Expand/collapse details */}
+                    <button
+                      onClick={() => setExpandedPkg(isExpanded ? null : pkg.id)}
+                      className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+                    >
+                      {isExpanded ? (
+                        <><ChevronUp className="h-3.5 w-3.5" /> Hide full details</>
+                      ) : (
+                        <><ChevronDown className="h-3.5 w-3.5" /> View full test details</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className="px-6 pb-4 border-t border-slate-100 pt-4 space-y-2">
+                      {pkg.details.map((d) => (
+                        <div key={d.category}>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">{d.category}</p>
+                          <p className="text-xs text-slate-600 leading-relaxed">{d.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* CTA */}
+                  <div className="p-6 pt-3 mt-auto">
+                    <Link to={currentUser ? '/dashboard/book' : '/register'} className="block">
+                      <button className={`w-full py-2.5 rounded-2xl text-sm font-bold transition-colors ${pkg.buttonColor}`}>
+                        Book Now
+                      </button>
+                    </Link>
+                  </div>
                 </div>
-                <div className="text-3xl font-extrabold gradient-text mb-4">₹{pkg.price}</div>
-                <ul className="space-y-1.5 mb-6 flex-1">
-                  {pkg.tests.map((t) => (
-                    <li key={t} className="flex items-center gap-2 text-sm text-slate-600">
-                      <CheckCircle className="h-3.5 w-3.5 text-teal-500 shrink-0" />
-                      {t}
-                    </li>
-                  ))}
-                </ul>
-                <Link to={currentUser ? '/dashboard/book' : '/register'}>
-                  <Button variant="outline" size="sm" className="w-full">
-                    Book Now
-                  </Button>
-                </Link>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </section>

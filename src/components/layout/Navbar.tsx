@@ -24,6 +24,7 @@ export function Navbar() {
           { to: '/admin', label: 'Dashboard' },
           { to: '/admin/appointments', label: 'Appointments' },
           { to: '/admin/patients', label: 'Patients' },
+          { to: '/admin/packages', label: 'Packages' },
         ]
       : [
           { to: '/dashboard', label: 'Dashboard' },

@@ -65,102 +65,113 @@ export interface Report {
 
 // ─── Packages ─────────────────────────────────────────────────────────────
 
+export interface PackageDetail {
+  category: string
+  text: string
+}
+
 export interface Package {
   id: string
   name: string
   price: number
-  description: string
-  tests: string[]
-  popular?: boolean
+  testCount: number
+  isPopular: boolean
+  color: string
+  headerColor: string
+  buttonColor: string
+  consultations: string[]
+  summary: string[]
+  details: PackageDetail[]
+  order: number
 }
 
 export const PACKAGES: Package[] = [
   {
-    id: 'basic-health',
-    name: 'Basic Health Check',
-    price: 499,
-    description: 'Essential screening for a quick health overview',
-    tests: ['CBC', 'Blood Glucose (Fasting)', 'Urine Routine', 'Blood Pressure'],
-  },
-  {
-    id: 'comprehensive',
-    name: 'Comprehensive Health Package',
-    price: 1299,
-    description: 'Full-body check covering all major organ systems',
-    tests: [
-      'CBC with Differential',
-      'Lipid Profile',
-      'Liver Function Test (LFT)',
-      'Kidney Function Test (KFT)',
-      'Thyroid Profile (T3, T4, TSH)',
-      'Blood Glucose (Fasting & PP)',
-      'Urine Routine & Microscopy',
+    id: 'basic',
+    name: 'Basic Screening Package',
+    price: 1599,
+    testCount: 30,
+    isPopular: false,
+    order: 0,
+    color: 'bg-white border-slate-200',
+    headerColor: 'text-slate-800',
+    buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
+    consultations: ['Doctor', 'Dental', 'Eye'],
+    summary: [
+      'Blood-CBC (17 Parameters)',
+      'Thyroid (1 Parameter: TSH)',
+      'Kidney & Liver (4 Parameters)',
+      'Heart (Total Cholesterol)',
+      'Sugar (RBS) & Vitals (6)',
     ],
-    popular: true,
-  },
-  {
-    id: 'diabetes-care',
-    name: 'Diabetes Care Panel',
-    price: 799,
-    description: 'Targeted monitoring for diabetes management',
-    tests: [
-      'Blood Glucose Fasting',
-      'Blood Glucose Post Prandial',
-      'HbA1c',
-      'Insulin Fasting',
-      'Urine Microalbumin',
-      'Kidney Function Test',
+    details: [
+      { category: 'BLOOD-CBC (17)', text: 'Hemoglobin, Total WBC Count, Neutrophils, Lymphocytes, Eosinophils, Basophils, Monocytes, PCV, Hematocrit, Total RBC Count, Platelet Count, MCV, MCH, MCHC, RDW-CV, RDW-SD, PDW' },
+      { category: 'THYROID (1)', text: 'TSH' },
+      { category: 'SUGAR (1)', text: 'Random Blood Sugar (RBS)' },
+      { category: 'KIDNEY (2)', text: 'Urea, Creatinine' },
+      { category: 'LIVER (2)', text: 'Total Protein, Serum Albumin' },
+      { category: 'HEART (1)', text: 'Total Cholesterol' },
+      { category: 'VITALS (6)', text: 'Height, Weight, BMI, SpO2, Pulse, Blood Pressure' },
     ],
   },
   {
-    id: 'cardiac-care',
-    name: 'Cardiac Risk Assessment',
-    price: 999,
-    description: 'Advanced cardiovascular risk profiling',
-    tests: [
-      'Lipid Profile',
-      'Homocysteine',
-      'hs-CRP',
-      'ECG',
-      'Blood Pressure',
-      'Blood Glucose',
-      'CBC',
+    id: 'economy',
+    name: 'Economy Disease Checkup',
+    price: 2599,
+    testCount: 42,
+    isPopular: true,
+    order: 1,
+    color: 'bg-blue-50 border-blue-200 shadow-blue-100',
+    headerColor: 'text-blue-700',
+    buttonColor: 'bg-blue-600 hover:bg-blue-700 text-white',
+    consultations: ['Doctor', 'Dental', 'Eye'],
+    summary: [
+      'Blood-CBC (17 Parameters)',
+      'Thyroid (3 Parameters: T3, T4, TSH)',
+      'Kidney (3) & Liver (5)',
+      'Heart Lipid Profile (4 Parameters)',
+      'Body Electrolytes (2) & Sugar (2)',
+    ],
+    details: [
+      { category: 'BLOOD-CBC (17)', text: 'Hemoglobin, Total WBC Count, Neutrophils, Lymphocytes, Eosinophils, Basophils, Monocytes, PCV, Hematocrit, Total RBC Count, Platelet Count, MCV, MCH, MCHC, RDW-CV, RDW-SD, PDW' },
+      { category: 'THYROID (3)', text: 'TSH, HYPOTHYROIDISM/HYPERTHYROIDISM - T3, T4' },
+      { category: 'SUGAR (2)', text: 'Random Blood Sugar (RBS), HbA1c' },
+      { category: 'KIDNEY (3)', text: 'Urea, Creatinine, Uric Acid' },
+      { category: 'LIVER (5)', text: 'Total Protein, Serum Albumin, Total Bilirubin, Direct Bilirubin, Indirect Bilirubin' },
+      { category: 'HEART (4)', text: 'Total Cholesterol, HDL, LDL, Triglycerides' },
+      { category: 'BODY ELECTROLYTES (2)', text: 'Sodium, Potassium' },
+      { category: 'VITALS (6)', text: 'Height, Weight, BMI, SpO2, Pulse, Blood Pressure' },
     ],
   },
   {
-    id: 'womens-health',
-    name: "Women's Wellness Package",
-    price: 1499,
-    description: 'Comprehensive panel tailored for women',
-    tests: [
-      'CBC',
-      'Thyroid Profile',
-      'Vitamin D',
-      'Vitamin B12',
-      'Iron Studies',
-      'Calcium',
-      'Pap Smear (optional)',
-      'Hormone Panel (FSH, LH, Estradiol)',
+    id: 'advanced',
+    name: 'Advanced Prevention',
+    price: 3599,
+    testCount: 56,
+    isPopular: false,
+    order: 2,
+    color: 'bg-white border-slate-200',
+    headerColor: 'text-slate-800',
+    buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
+    consultations: ['Doctor', 'Dental', 'Eye'],
+    summary: [
+      'Anemia Profile (Iron, B12)',
+      'Full Liver Profile (11 Parameters)',
+      'Complete Heart Profile (7 Parameters)',
+      'Bone Strength (Calcium, Vit D)',
+      'Extended Electrolytes (3 Parameters)',
     ],
-  },
-  {
-    id: 'senior-care',
-    name: 'Senior Citizen Package',
-    price: 1799,
-    description: 'Complete geriatric health evaluation',
-    tests: [
-      'CBC with Differential',
-      'Lipid Profile',
-      'LFT',
-      'KFT',
-      'Thyroid Profile',
-      'Blood Glucose (Fasting & PP)',
-      'HbA1c',
-      'Vitamin D & B12',
-      'Calcium & Phosphorus',
-      'PSA (for males)',
-      'ECG',
-      'Urine Routine',
+    details: [
+      { category: 'BLOOD-CBC (17)', text: 'Hemoglobin, Total WBC Count, Neutrophils, Lymphocytes, Eosinophils, Basophils, Monocytes, PCV, Hematocrit, Total RBC Count, Platelet Count, MCV, MCH, MCHC, RDW-CV, RDW-SD, PDW' },
+      { category: 'ANEMIA PROFILE (2)', text: 'Iron Study, Vitamin B12' },
+      { category: 'THYROID (3)', text: 'TSH, HYPOTHYROIDISM/HYPERTHYROIDISM - T3, T4' },
+      { category: 'SUGAR (2)', text: 'Random Blood Sugar (RBS), HbA1c' },
+      { category: 'KIDNEY (3)', text: 'Urea, Creatinine, Uric Acid' },
+      { category: 'LIVER (11)', text: 'Total Protein, Serum Albumin, Total Bilirubin, Direct Bilirubin, Indirect Bilirubin, SGOT, SGPT, GGT, ALP, Globulin, A/G Ratio' },
+      { category: 'HEART (7)', text: 'Total Cholesterol, HDL, LDL, Triglycerides, VLDL, Non-HDL, VLDL Ratios' },
+      { category: 'BODY ELECTROLYTES (3)', text: 'Sodium, Potassium, Chloride' },
+      { category: 'BONE STRENGTH (2)', text: 'Calcium, Vitamin D' },
+      { category: 'VITALS (6)', text: 'Height, Weight, BMI, SpO2, Pulse, Blood Pressure' },
     ],
   },
 ]
