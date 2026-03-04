@@ -7,7 +7,7 @@ interface BrandLogoProps {
   white?: boolean
 }
 
-export function BrandLogo({ size = 'md', white = false }: BrandLogoProps) {
+export function BrandLogo({ size = 'md', white: _white = false }: BrandLogoProps) {
   const heights = {
     sm: 'h-16',
     md: 'h-20',
