@@ -4,9 +4,11 @@ import { CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent } from '../../components/ui/Card'
+import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { createAppointment } from '../../lib/firestore'
-import { PACKAGES, TIME_SLOTS, type Package } from '../../types'
+import { usePackages } from '../../hooks/usePackages'
+import { TIME_SLOTS, type Package } from '../../types'
 import { addDays, format } from 'date-fns'
 
 type Step = 1 | 2 | 3
@@ -14,6 +16,7 @@ type Step = 1 | 2 | 3
 export default function BookAppointmentPage() {
   const { userProfile } = useAuth()
   const navigate = useNavigate()
+  const { packages, loading: pkgsLoading } = usePackages()
 
   const [step, setStep] = useState<Step>(1)
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null)
@@ -101,7 +104,9 @@ export default function BookAppointmentPage() {
           <div className="space-y-4">
             <h2 className="font-bold text-slate-900">Choose a Package</h2>
             <div className="grid grid-cols-1 gap-3">
-              {PACKAGES.map((pkg) => (
+              {pkgsLoading ? (
+                <LoadingSpinner className="py-8" />
+              ) : packages.map((pkg) => (
                 <div
                   key={pkg.id}
                   onClick={() => setSelectedPackage(pkg)}
@@ -115,13 +120,13 @@ export default function BookAppointmentPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-slate-900">{pkg.name}</h3>
-                        {pkg.popular && (
+                        {pkg.isPopular && (
                           <span className="gradient-bg text-white text-xs px-2 py-0.5 rounded-full">
                             Popular
                           </span>
                         )}
                       </div>
-                      <p className="text-slate-500 text-xs mt-0.5">{pkg.description}</p>
+                      <p className="text-slate-500 text-xs mt-0.5">{pkg.testCount} tests included</p>
                     </div>
                     <span className="font-extrabold text-teal-600 text-lg shrink-0 ml-4">
                       ₹{pkg.price}
