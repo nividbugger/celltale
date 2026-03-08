@@ -43,13 +43,13 @@ export function Footer() {
             </h3>
             <ul className="space-y-3 text-sm text-slate-300">
               <li className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-teal-400" /> sruthi_kandaswamy@celltalediagnostics.com
+                <Mail className="h-4 w-4 text-teal-400" /> care@celltalediagnostics.com
               </li>
               <li className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-teal-400" /> +91 8870008442
+                <Phone className="h-4 w-4 text-teal-400" /> +91 8838720883
               </li>
               <li className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-teal-400" /> Chennai, Tamil Nadu
+                <MapPin className="h-4 w-4 text-teal-400" /> No.41 Ilango adigal salai, shanthi nagar, Lawspet, Puducherry 605008
               </li>
             </ul>
           </div>

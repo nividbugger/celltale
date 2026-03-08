@@ -13,6 +13,7 @@ import {
   createUserDocument,
   getUserDocument,
 } from '../lib/firestore'
+import { queueEmail } from '../lib/emailQueue'
 import type { User } from '../types'
 
 interface AuthContextValue {
@@ -46,6 +47,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await updateProfile(user, { displayName: name })
     await createUserDocument(user.uid, { name, email, phone })
     await loadProfile(user)
+    // Queue welcome email (processed by GitHub Actions worker)
+    queueEmail('welcome', email, { patientName: name }).catch(() => {})
   }
 
   async function signIn(email: string, password: string) {
@@ -56,11 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { user } = await signInWithPopup(auth, googleProvider)
     const existing = await getUserDocument(user.uid)
     if (!existing) {
-      await createUserDocument(user.uid, {
-        name: user.displayName ?? 'User',
-        email: user.email ?? '',
-        phone: user.phoneNumber ?? '',
-      })
+      const name = user.displayName ?? 'User'
+      const email = user.email ?? ''
+      await createUserDocument(user.uid, { name, email, phone: user.phoneNumber ?? '' })
+      // Queue welcome email for new Google sign-up
+      queueEmail('welcome', email, { patientName: name }).catch(() => {})
     }
     await loadProfile(user)
   }

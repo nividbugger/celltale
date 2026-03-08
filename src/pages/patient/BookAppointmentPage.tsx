@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3'
 import { DashboardLayout } from '../../components/layout/DashboardLayout'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent } from '../../components/ui/Card'
@@ -26,14 +27,26 @@ export default function BookAppointmentPage() {
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { executeRecaptcha } = useGoogleReCaptcha()
 
   const today = format(new Date(), 'yyyy-MM-dd')
   const maxDate = format(addDays(new Date(), 30), 'yyyy-MM-dd')
 
-  async function handleConfirm() {
+  const handleConfirm = useCallback(async () => {
     if (!userProfile || !selectedPackage) return
+    if (!executeRecaptcha) {
+      setError('reCAPTCHA not ready. Please try again.')
+      return
+    }
     setLoading(true)
     setError('')
+    try {
+      await executeRecaptcha('book_appointment')
+    } catch {
+      setLoading(false)
+      setError('CAPTCHA verification failed. Please try again.')
+      return
+    }
     try {
       await createAppointment({
         patientId: userProfile.uid,
@@ -55,7 +68,7 @@ export default function BookAppointmentPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [executeRecaptcha, userProfile, selectedPackage, date, timeSlot, address, notes, navigate])
 
   const canProceedStep1 = selectedPackage !== null
   const canProceedStep2 = date && timeSlot && address.trim().length > 5

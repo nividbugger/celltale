@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { UserPlus } from 'lucide-react'
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -21,6 +22,7 @@ export default function RegisterPage() {
   const { signUp } = useAuth()
   const navigate = useNavigate()
   const [serverError, setServerError] = useState('')
+  const { executeRecaptcha } = useGoogleReCaptcha()
 
   const {
     register,
@@ -31,9 +33,14 @@ export default function RegisterPage() {
 
   const password = watch('password')
 
-  async function onSubmit(data: RegisterFormData) {
+  const onSubmit = useCallback(async (data: RegisterFormData) => {
+    if (!executeRecaptcha) {
+      setServerError('reCAPTCHA not ready. Please try again.')
+      return
+    }
     setServerError('')
     try {
+      await executeRecaptcha('register')
       await signUp(data.email, data.password, data.name, data.phone)
       navigate('/dashboard')
     } catch (err: unknown) {
@@ -41,7 +48,7 @@ export default function RegisterPage() {
       const message = (err as { message?: string }).message ?? ''
       setServerError(ERROR_MAP[code] ?? `Registration failed. (${code || message})`)
     }
-  }
+  }, [executeRecaptcha, signUp, navigate])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-teal-50 px-4 py-12">

@@ -1,0 +1,68 @@
+name: Email Worker
+
+on:
+  schedule:
+    # Process mailQueue every 5 minutes
+    - cron: '*/5 * * * *'
+    # Reminders disabled for now – uncomment to re-enable
+    # - cron: '0 * * * *'
+  # Allow manual trigger from GitHub Actions UI for testing
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Worker mode'
+        required: true
+        default: 'queue'
+        type: choice
+        options:
+          - queue
+          # - reminders  # disabled for now
+
+jobs:
+  email-worker:
+    name: Run Email Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: .github/scripts/package.json
+
+      - name: Install dependencies
+        working-directory: .github/scripts
+        run: npm install
+
+      # Determine mode:
+      #   - Manual trigger: use the selected input
+      #   - Scheduled at :00 minute → reminders
+      #   - All other cron runs → queue
+      - name: Determine worker mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          else
+            echo "mode=queue" >> $GITHUB_OUTPUT
+          fi
+          # Reminder mode disabled for now:
+          # elif [ "$(date +%M)" = "00" ]; then
+          #   echo "mode=reminders" >> $GITHUB_OUTPUT
+
+      - name: Run email worker
+        working-directory: .github/scripts
+        env:
+          WORKER_MODE: ${{ steps.mode.outputs.mode }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: node emailWorker.mjs
