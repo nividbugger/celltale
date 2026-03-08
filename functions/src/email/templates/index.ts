@@ -213,7 +213,7 @@ export function sampleCollectedTemplate(data: AppointmentEmailData): string {
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px 20px;margin:20px 0;">
       <p style="margin:0;color:#1e40af;font-size:14px;font-weight:600;">🔬 What Happens Next</p>
       <ul style="color:#1d4ed8;font-size:13px;line-height:2;padding-left:18px;margin:8px 0 0;">
-        <li>Your sample is processed at our NABL-accredited partner lab</li>
+        <li>Your sample is processed at our certified partner lab</li>
         <li>Results are typically ready within <strong>24–48 hours</strong></li>
         <li>You will receive an email as soon as your report is available</li>
         <li>Downloadable PDF will be available in your dashboard</li>

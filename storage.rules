@@ -2,8 +2,16 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     match /reports/{appointmentId}/{fileName} {
-      allow read:  if request.auth != null;
+      // Only the patient whose appointment this is, or an admin, can read
+      allow read: if request.auth != null
+                  && (
+                    firestore.get(/databases/(default)/documents/appointments/$(appointmentId)).data.patientId == request.auth.uid
+                    || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+                  );
+
+      // Only admins can upload reports
       allow write: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
                    && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType == 'application/pdf';
     }

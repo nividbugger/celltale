@@ -26,7 +26,7 @@ export default function LandingPage() {
         <Navbar />
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-28 text-center relative">
           <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur rounded-full px-4 py-2 text-teal-300 text-sm font-medium mb-8">
-            <Star className="h-4 w-4" /> Trusted by 10,000+ patients
+            <Star className="h-4 w-4" /> Professional diagnostics, delivered to your doorstep
           </div>
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white tracking-tight mb-6 leading-tight">
             Every Cell
@@ -69,7 +69,7 @@ export default function LandingPage() {
               {
                 icon: Award,
                 title: 'Expert Consultations',
-                desc: 'Reports reviewed and validated by NABL-accredited pathologists with over 15 years of experience.',
+                desc: 'Reports reviewed and validated by expert pathologists with extensive clinical experience.',
               },
               {
                 icon: CheckCircle,
