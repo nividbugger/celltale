@@ -1,12 +1,9 @@
 name: Email Worker
 
 on:
-  schedule:
-    # Process mailQueue every 5 minutes
-    - cron: '*/5 * * * *'
-    # Reminders disabled for now – uncomment to re-enable
-    # - cron: '0 * * * *'
-  # Allow manual trigger from GitHub Actions UI for testing
+  # Scheduled runs disabled – re-enable when FIREBASE_SERVICE_ACCOUNT and Gmail secrets are configured
+  # schedule:
+  #   - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -16,7 +13,6 @@ on:
         type: choice
         options:
           - queue
-          # - reminders  # disabled for now
 
 jobs:
   email-worker:
