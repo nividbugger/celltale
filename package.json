@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently --kill-others --names \"vite,emulators\" --prefix-colors \"cyan,yellow\" \"vite\" \"firebase emulators:start\"",
+    "dev:frontend": "vite",
+    "dev:emulators": "firebase emulators:start",
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
@@ -24,6 +26,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
+    "concurrently": "^9.2.1",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",
