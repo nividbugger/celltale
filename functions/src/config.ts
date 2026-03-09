@@ -8,6 +8,7 @@
 export const config = {
   gmail: {
     user: process.env.GMAIL_USER ?? '',
+    appPassword: process.env.GMAIL_APP_PASSWORD ?? '',
     clientId: process.env.GMAIL_CLIENT_ID ?? '',
     clientSecret: process.env.GMAIL_CLIENT_SECRET ?? '',
     refreshToken: process.env.GMAIL_REFRESH_TOKEN ?? '',
@@ -16,7 +17,9 @@ export const config = {
     /** Public URL of the deployed app (used for CTA links in emails) */
     url: process.env.APP_URL ?? 'https://celltalediagnostics.com',
     name: 'CellTale Diagnostics',
-    supportEmail: process.env.GMAIL_USER ?? 'support@celltalediagnostics.com',
+    /** Visible sender address on all outgoing emails */
+    fromEmail: process.env.FROM_EMAIL ?? 'care@celltalediagnostics.com',
+    supportEmail: process.env.SUPPORT_EMAIL ?? 'care@celltalediagnostics.com',
     phone: '+91-XXXXX-XXXXX',
   },
   /** Default reminder window: hours before appointment to send reminder */
