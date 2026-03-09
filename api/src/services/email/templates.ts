@@ -1,6 +1,6 @@
 import { config } from '../../config'
 
-// ─── Shared layout wrapper ────────────────────────────────────────────────
+// ─── Shared layout wrapper ────────────────────────────────────────────────────
 
 export function baseLayout(content: string): string {
   return `<!DOCTYPE html>
@@ -54,7 +54,7 @@ export function baseLayout(content: string): string {
 </html>`
 }
 
-// ─── Reusable HTML helpers ────────────────────────────────────────────────
+// ─── Reusable HTML helpers ────────────────────────────────────────────────────
 
 export function detailRow(label: string, value: string): string {
   return `<tr>
@@ -81,7 +81,34 @@ export function greeting(name: string): string {
   return `<p style="margin:0 0 8px;color:#1e293b;font-size:22px;font-weight:700;">Hi ${name},</p>`
 }
 
-// ─── Template 1: Welcome ──────────────────────────────────────────────────
+// ─── Appointment email data shape ─────────────────────────────────────────────
+
+export interface AppointmentEmailData {
+  patientName: string
+  packageName: string
+  packagePrice: number
+  date: string          // yyyy-MM-dd
+  timeSlot: string      // '09:00 AM'
+  collectionAddress: string
+  appointmentId: string
+  notes?: string
+}
+
+// ─── Date formatter ───────────────────────────────────────────────────────────
+
+/** Formats 'yyyy-MM-dd' → 'Wednesday, 5 March 2026' */
+export function formatDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return dt.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+// ─── Template 1: Welcome ──────────────────────────────────────────────────────
 
 export function welcomeTemplate(name: string): string {
   return baseLayout(`
@@ -107,18 +134,7 @@ export function welcomeTemplate(name: string): string {
   `)
 }
 
-// ─── Template 2: Appointment Booked (patient books) ──────────────────────
-
-export interface AppointmentEmailData {
-  patientName: string
-  packageName: string
-  packagePrice: number
-  date: string          // yyyy-MM-dd
-  timeSlot: string      // '09:00 AM'
-  collectionAddress: string
-  appointmentId: string
-  notes?: string
-}
+// ─── Template 2: Appointment Booked ──────────────────────────────────────────
 
 export function appointmentBookedTemplate(data: AppointmentEmailData): string {
   return baseLayout(`
@@ -142,7 +158,7 @@ export function appointmentBookedTemplate(data: AppointmentEmailData): string {
   `)
 }
 
-// ─── Template 3: Appointment Confirmed (admin confirms) ───────────────────
+// ─── Template 3: Appointment Confirmed ───────────────────────────────────────
 
 export function appointmentConfirmedTemplate(data: AppointmentEmailData): string {
   return baseLayout(`
@@ -170,7 +186,7 @@ export function appointmentConfirmedTemplate(data: AppointmentEmailData): string
   `)
 }
 
-// ─── Template 4: Reminder ─────────────────────────────────────────────────
+// ─── Template 4: Reminder ─────────────────────────────────────────────────────
 
 export function reminderTemplate(data: AppointmentEmailData, hoursLeft: number): string {
   return baseLayout(`
@@ -197,7 +213,7 @@ export function reminderTemplate(data: AppointmentEmailData, hoursLeft: number):
   `)
 }
 
-// ─── Template 5: Sample Collected ─────────────────────────────────────────
+// ─── Template 5: Sample Collected ─────────────────────────────────────────────
 
 export function sampleCollectedTemplate(data: AppointmentEmailData): string {
   return baseLayout(`
@@ -223,7 +239,7 @@ export function sampleCollectedTemplate(data: AppointmentEmailData): string {
   `)
 }
 
-// ─── Template 6: Report Ready ─────────────────────────────────────────────
+// ─── Template 6: Report Ready ─────────────────────────────────────────────────
 
 export function reportReadyTemplate(data: AppointmentEmailData): string {
   return baseLayout(`
@@ -245,7 +261,7 @@ export function reportReadyTemplate(data: AppointmentEmailData): string {
         <li>Keep a copy of the PDF for your medical records</li>
       </ul>
     </div>
-    ${ctaButton('View & Download Report', `${config.app.url}/dashboard/reports`)}
+    ${ctaButton('View &amp; Download Report', `${config.app.url}/dashboard/reports`)}
     <p style="margin:0;color:#94a3b8;font-size:13px;text-align:center;">
       Need help understanding your results? 
       <a href="mailto:${config.app.supportEmail}" style="color:#0d9488;">Contact us</a>
@@ -272,18 +288,4 @@ export function appointmentCancelledTemplate(data: AppointmentEmailData): string
       Questions? <a href="mailto:${config.app.supportEmail}" style="color:#0d9488;">Contact us</a>
     </p>
   `)
-}
-
-// ─── Date formatter ───────────────────────────────────────────────────────
-
-/** Formats 'yyyy-MM-dd' → 'Wednesday, 5 March 2026' */
-export function formatDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number)
-  const dt = new Date(y, m - 1, d)
-  return dt.toLocaleDateString('en-IN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
 }

@@ -1,5 +1,5 @@
 import * as nodemailer from 'nodemailer'
-import { config } from '../config'
+import { config } from '../../config'
 
 let _etherealTransporter: nodemailer.Transporter | null = null
 
@@ -7,17 +7,6 @@ let _etherealTransporter: nodemailer.Transporter | null = null
  * In development (NODE_ENV !== 'production'), returns a shared Ethereal fake-SMTP
  * transporter. Emails are captured at https://ethereal.email — no real delivery.
  * In production, uses the Gmail OAuth2 transporter.
- *
- * Prerequisites for production (run ONCE):
- *   1. Enable Gmail API in Google Cloud Console for your project.
- *   2. Create an OAuth 2.0 Client ID (type: Web application).
- *   3. Obtain a refresh token via https://developers.google.com/oauthplayground
- *      – Click ⚙ > "Use your own OAuth credentials", enter Client ID + Secret
- *      – Select scope: https://mail.google.com/
- *      – Authorize as sruthi_kandaswamy@celltalediagnostics.com
- *      – Exchange the auth code for a refresh token
- *   4. Store CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN in functions/.env (local)
- *      or Firebase Secret Manager (production).
  */
 export async function createTransporter(): Promise<nodemailer.Transporter> {
   if (process.env.NODE_ENV !== 'production') {
@@ -29,7 +18,7 @@ export async function createTransporter(): Promise<nodemailer.Transporter> {
         secure: false,
         auth: { user: testAccount.user, pass: testAccount.pass },
       })
-      console.info(`[transporter] DEV mode — Ethereal account: ${testAccount.user}`)
+      console.info(`[transporter] DEV mode — Ethereal test account: ${testAccount.user}`)
       console.info(`[transporter] Preview emails at https://ethereal.email`)
     }
     return _etherealTransporter

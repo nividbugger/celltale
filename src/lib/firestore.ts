@@ -17,7 +17,6 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import type { User, Appointment, AppointmentStatus, Report, TestValue, Package } from '../types'
-import { queueEmail, statusToEmailType } from './emailQueue'
 
 // ─── Users ────────────────────────────────────────────────────────────────
 
@@ -57,20 +56,7 @@ export async function createAppointment(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
-  // Fetch patient email and queue booking confirmation email
-  getUserDocument(data.patientId).then((patient) => {
-    if (!patient?.email) return
-    queueEmail('appointment_booked', patient.email, {
-      patientName: data.patientName,
-      packageName: data.packageName,
-      packagePrice: data.packagePrice,
-      date: data.date,
-      timeSlot: data.timeSlot,
-      collectionAddress: data.collectionAddress,
-      appointmentId: ref.id,
-      notes: data.notes,
-    }).catch(() => {})
-  }).catch(() => {})
+  // Email is sent automatically by the onAppointmentCreated Cloud Function trigger.
   return ref.id
 }
 
@@ -103,26 +89,7 @@ export async function updateAppointmentStatus(
   const data: Record<string, unknown> = { status, updatedAt: serverTimestamp() }
   if (notes !== undefined) data.notes = notes
   await updateDoc(doc(db, 'appointments', id), data)
-  // Queue status-change email if applicable
-  const emailType = statusToEmailType(status)
-  if (emailType) {
-    getAppointmentById(id).then((appt) => {
-      if (!appt) return
-      return getUserDocument(appt.patientId).then((patient) => {
-        if (!patient?.email) return
-        return queueEmail(emailType, patient.email, {
-          patientName: appt.patientName,
-          packageName: appt.packageName,
-          packagePrice: appt.packagePrice,
-          date: appt.date,
-          timeSlot: appt.timeSlot,
-          collectionAddress: appt.collectionAddress,
-          appointmentId: id,
-          notes: appt.notes,
-        })
-      })
-    }).catch(() => {})
-  }
+  // Status-change email is sent automatically by the onAppointmentUpdated Cloud Function trigger.
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────

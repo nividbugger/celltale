@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin'
 import { sendEmail } from '../email/sendEmail'
 import {
   appointmentConfirmedTemplate,
+  appointmentCancelledTemplate,
   sampleCollectedTemplate,
   reportReadyTemplate,
   type AppointmentEmailData,
@@ -79,8 +80,16 @@ export const onAppointmentUpdated = onDocumentUpdated(
         })
         break
 
+      case 'Cancelled':
+        await sendEmail({
+          to: patientEmail,
+          subject: `❌ Appointment Cancelled – ${after.packageName} on ${after.date}`,
+          html: appointmentCancelledTemplate(templateData),
+        })
+        break
+
       default:
-        // Cancelled / Completed / Pending – no email for now
+        // Completed / Pending – no email
         break
     }
   },
