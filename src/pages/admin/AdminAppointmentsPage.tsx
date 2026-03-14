@@ -136,6 +136,19 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
                 <p className="text-xs text-slate-400">Collection Address</p>
                 <p className="font-medium">{appt.collectionAddress}</p>
               </div>
+              {appt.mapsLink && (
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-400">Maps Link</p>
+                  <a
+                    href={appt.mapsLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-teal-600 hover:underline text-sm"
+                  >
+                    View Location on Maps
+                  </a>
+                </div>
+              )}
               {appt.notes && (
                 <div className="col-span-2">
                   <p className="text-xs text-slate-400">Notes</p>
