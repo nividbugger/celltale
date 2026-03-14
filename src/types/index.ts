@@ -36,6 +36,7 @@ export interface Appointment {
   date: string
   timeSlot: string
   collectionAddress: string
+  mapsLink?: string
   status: AppointmentStatus
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -179,10 +180,6 @@ export const PACKAGES: Package[] = [
 // ─── Time Slots ───────────────────────────────────────────────────────────
 
 export const TIME_SLOTS: string[] = [
-  '07:00 AM',
-  '07:30 AM',
-  '08:00 AM',
-  '08:30 AM',
   '09:00 AM',
   '09:30 AM',
   '10:00 AM',
@@ -202,6 +199,12 @@ export const TIME_SLOTS: string[] = [
   '05:00 PM',
   '05:30 PM',
   '06:00 PM',
+  '06:30 PM',
+  '07:00 PM',
+  '07:30 PM',
+  '08:00 PM',
+  '08:30 PM',
+  '09:00 PM',
 ]
 
 // ─── Status Colors ────────────────────────────────────────────────────────
