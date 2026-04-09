@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { UploadCloud, ChevronDown, ChevronUp, RefreshCw, CheckCircle, FlaskConical, ClipboardCheck } from 'lucide-react'
+import { UploadCloud, ChevronDown, ChevronUp, RefreshCw, CheckCircle, FlaskConical, ClipboardCheck, Trash2, Barcode } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -10,7 +10,8 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAllAppointments } from '../../hooks/useAppointments'
-import { updateAppointmentStatus } from '../../lib/firestore'
+import { updateAppointmentStatus, softDeleteAppointment } from '../../lib/firestore'
+import { BarcodePrintModal } from '../../components/admin/BarcodePrintModal'
 import type { Appointment, AppointmentStatus } from '../../types'
 import { format } from 'date-fns'
 
@@ -50,6 +51,9 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
   const [saving, setSaving] = useState(false)
   const [advancing, setAdvancing] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [barcodeModalOpen, setBarcodeModalOpen] = useState(false)
 
   const nextStatus = NEXT_STATUS[appt.status]
   const nextLabel = NEXT_STATUS_LABEL[appt.status]
@@ -69,6 +73,14 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
     onUpdate()
     setSaving(false)
     setModalOpen(false)
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    await softDeleteAppointment(appt.id)
+    onUpdate()
+    setDeleting(false)
+    setDeleteConfirmOpen(false)
   }
 
   return (
@@ -105,9 +117,28 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
                 </Link>
               )}
 
-              <Button size="sm" variant="ghost" onClick={() => setModalOpen(true)}>
-                Edit
-              </Button>
+              {appt.status !== 'Deleted' && (
+                <Button size="sm" variant="outline" onClick={() => setBarcodeModalOpen(true)}>
+                  <Barcode className="h-3.5 w-3.5 mr-1" /> Barcode
+                </Button>
+              )}
+
+              {appt.status !== 'Deleted' && (
+                <Button size="sm" variant="ghost" onClick={() => setModalOpen(true)}>
+                  Edit
+                </Button>
+              )}
+
+              {appt.status !== 'Deleted' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="text-red-400 hover:text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
 
               <button
                 onClick={() => setExpanded(!expanded)}
@@ -183,11 +214,36 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
           </div>
         </div>
       </Modal>
+
+      <Modal isOpen={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} title="Delete Appointment">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Are you sure you want to delete the appointment for <span className="font-semibold">{appt.patientName}</span> ({appt.packageName})?
+          </p>
+          <p className="text-xs text-slate-400">
+            This is a soft delete — the appointment will move to the Deleted tab and can still be viewed.
+          </p>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="flex-1 bg-red-600 hover:bg-red-700" loading={deleting} onClick={handleDelete}>
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <BarcodePrintModal
+        isOpen={barcodeModalOpen}
+        onClose={() => setBarcodeModalOpen(false)}
+        appointment={appt}
+      />
     </>
   )
 }
 
-type MainTab = 'active' | 'completed'
+type MainTab = 'active' | 'completed' | 'deleted'
 
 export default function AdminAppointmentsPage() {
   const { logOut } = useAuth()
@@ -195,12 +251,15 @@ export default function AdminAppointmentsPage() {
   const [mainTab, setMainTab] = useState<MainTab>('active')
   const [subFilter, setSubFilter] = useState<AppointmentStatus | 'All'>('All')
 
-  const activeAppointments = appointments.filter((a) => a.status !== 'Completed')
+  const activeAppointments = appointments.filter((a) => a.status !== 'Completed' && a.status !== 'Deleted')
   const completedAppointments = appointments.filter((a) => a.status === 'Completed')
+  const deletedAppointments = appointments.filter((a) => a.status === 'Deleted')
 
   const displayed =
     mainTab === 'completed'
       ? completedAppointments
+      : mainTab === 'deleted'
+      ? deletedAppointments
       : subFilter === 'All'
       ? activeAppointments
       : activeAppointments.filter((a) => a.status === subFilter)
@@ -278,6 +337,19 @@ export default function AdminAppointmentsPage() {
               {completedAppointments.length}
             </span>
           </button>
+          <button
+            onClick={() => setMainTab('deleted')}
+            className={`px-5 py-2 rounded-xl text-sm font-semibold transition-colors ${
+              mainTab === 'deleted'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Deleted
+            <span className="ml-2 text-xs font-bold text-slate-400">
+              {deletedAppointments.length}
+            </span>
+          </button>
         </div>
 
         {/* Sub-filters for active tab */}
@@ -310,7 +382,11 @@ export default function AdminAppointmentsPage() {
           <Card>
             <CardContent className="py-16 text-center">
               <p className="text-slate-500 font-medium">
-                {mainTab === 'completed' ? 'No completed cases yet.' : 'No appointments found.'}
+                {mainTab === 'completed'
+                  ? 'No completed cases yet.'
+                  : mainTab === 'deleted'
+                  ? 'No deleted appointments.'
+                  : 'No appointments found.'}
               </p>
             </CardContent>
           </Card>

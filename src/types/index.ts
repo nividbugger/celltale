@@ -24,6 +24,7 @@ export type AppointmentStatus =
   | 'Report Ready'
   | 'Completed'
   | 'Cancelled'
+  | 'Deleted'
 
 export interface Appointment {
   id: string
@@ -40,6 +41,7 @@ export interface Appointment {
   createdAt: Timestamp
   updatedAt: Timestamp
   notes?: string
+  barcodeId?: string
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────
@@ -213,6 +215,7 @@ export const STATUS_COLORS: Record<AppointmentStatus, string> = {
   'Report Ready': 'bg-teal-100 text-teal-800',
   Completed: 'bg-green-100 text-green-800',
   Cancelled: 'bg-red-100 text-red-800',
+  Deleted: 'bg-slate-100 text-slate-500',
 }
 
 // ─── Form Data Types ──────────────────────────────────────────────────────

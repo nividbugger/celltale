@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(firebase deploy:*)",
+      "WebFetch(domain:product.erbamannheim.com)",
+      "WebFetch(domain:pdfcoffee.com)",
+      "WebFetch(domain:www.sysmex.com)",
+      "WebFetch(domain:pdf.medicalexpo.com)",
+      "WebFetch(domain:www.scribd.com)"
+    ]
+  }
+}

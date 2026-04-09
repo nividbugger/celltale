@@ -26,7 +26,7 @@ export default function AdminDashboardPage() {
     Promise.all([getAdminStats(), getAllAppointments()])
       .then(([s, appts]) => {
         setStats(s)
-        setRecent(appts.slice(0, 5))
+        setRecent(appts.filter((a) => a.status !== 'Deleted' && a.status !== 'Cancelled').slice(0, 5))
       })
       .finally(() => setLoading(false))
   }, [])

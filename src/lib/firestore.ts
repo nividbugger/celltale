@@ -92,6 +92,32 @@ export async function updateAppointmentStatus(
   // Status-change email is sent automatically by the onAppointmentUpdated Cloud Function trigger.
 }
 
+function generateBarcodeId(): string {
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(2)
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const rand = String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+  return `${yy}${mm}${dd}${rand}`
+}
+
+export async function assignBarcodeId(appointmentId: string): Promise<string> {
+  const snap = await getDoc(doc(db, 'appointments', appointmentId))
+  if (!snap.exists()) throw new Error('Appointment not found')
+  const existing = snap.data().barcodeId as string | undefined
+  if (existing) return existing
+  const barcodeId = generateBarcodeId()
+  await updateDoc(doc(db, 'appointments', appointmentId), { barcodeId })
+  return barcodeId
+}
+
+export async function softDeleteAppointment(id: string): Promise<void> {
+  await updateDoc(doc(db, 'appointments', id), {
+    status: 'Deleted',
+    updatedAt: serverTimestamp(),
+  })
+}
+
 // ─── Reports ──────────────────────────────────────────────────────────────
 
 export async function createReport(data: {
