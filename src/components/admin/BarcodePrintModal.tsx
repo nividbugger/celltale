@@ -137,15 +137,17 @@ export function BarcodePrintModal({ isOpen, onClose, appointment }: Props) {
           <div className="text-center py-8 text-slate-500 text-sm">Generating barcode ID...</div>
         ) : barcodeId ? (
           <>
+            {/* Label preview — matches printed output */}
+            <div className="flex flex-col items-center p-4 bg-white border border-slate-200 rounded-xl">
+              <p className="text-xs font-bold text-slate-900 mb-1">{labelName}</p>
+              <svg ref={svgRef} />
+              <p className="text-[10px] text-slate-500 mt-1">{formattedDate} &middot; {appointment.timeSlot}</p>
+            </div>
+
             <div className="text-sm text-slate-600 space-y-1">
               <p><span className="text-slate-400">Patient:</span> <span className="font-medium text-slate-900">{appointment.patientName}</span></p>
               <p><span className="text-slate-400">Package:</span> {appointment.packageName}</p>
-              <p><span className="text-slate-400">Date:</span> {formattedDate} &middot; {appointment.timeSlot}</p>
               <p><span className="text-slate-400">Barcode ID:</span> <span className="font-mono font-semibold text-slate-900">{barcodeId}</span></p>
-            </div>
-
-            <div className="flex justify-center p-4 bg-white border border-slate-200 rounded-xl">
-              <svg ref={svgRef} />
             </div>
 
             <div>
