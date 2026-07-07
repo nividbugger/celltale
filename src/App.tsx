@@ -22,6 +22,8 @@ import AdminAppointmentsPage from './pages/admin/AdminAppointmentsPage'
 import AdminUploadReportPage from './pages/admin/AdminUploadReportPage'
 import AdminPatientsPage from './pages/admin/AdminPatientsPage'
 import AdminPackagesPage from './pages/admin/AdminPackagesPage'
+import AdminInvoicesPage from './pages/admin/AdminInvoicesPage'
+import AdminInvoiceEditorPage from './pages/admin/AdminInvoiceEditorPage'
 
 export default function App() {
   return (
@@ -114,6 +116,22 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminPackagesPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/invoices"
+            element={
+              <AdminRoute>
+                <AdminInvoicesPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/invoices/:invoiceId"
+            element={
+              <AdminRoute>
+                <AdminInvoiceEditorPage />
               </AdminRoute>
             }
           />

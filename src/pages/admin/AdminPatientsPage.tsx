@@ -55,6 +55,7 @@ export default function AdminPatientsPage() {
             { to: '/admin/appointments', label: 'Appointments' },
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
+            { to: '/admin/invoices', label: 'Invoices' },
           ].map((l) => (
             <Link
               key={l.to}
