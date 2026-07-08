@@ -33,13 +33,14 @@ import { DEFAULT_CLINIC_SETTINGS } from '../types'
 
 export async function createUserDocument(
   uid: string,
-  data: { name: string; email: string; phone: string },
+  data: { name: string; phone: string; email?: string; company?: string },
 ): Promise<void> {
   await setDoc(doc(db, 'users', uid), {
     uid,
     name: data.name,
-    email: data.email,
+    email: data.email ?? '',
     phone: data.phone,
+    ...(data.company ? { company: data.company } : {}),
     role: 'patient',
     createdAt: serverTimestamp(),
   })

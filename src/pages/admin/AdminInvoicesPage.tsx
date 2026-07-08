@@ -43,15 +43,11 @@ export default function AdminInvoicesPage() {
   }
 
   function handlePrint(invoice: Invoice) {
-    const html = buildInvoiceHtml(invoice, clinic)
+    const html = buildInvoiceHtml(invoice, clinic, { autoPrint: true })
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
     printWindow.document.write(html)
     printWindow.document.close()
-    printWindow.onload = () => {
-      printWindow.focus()
-      printWindow.print()
-    }
   }
 
   async function handleDelete() {

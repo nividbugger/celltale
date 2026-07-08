@@ -1,20 +1,151 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users, Search } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { Users, Search, UserPlus, Pencil } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
+import { Modal } from '../../components/ui/Modal'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllPatients } from '../../lib/firestore'
+import { registerPatient, updatePatient } from '../../lib/api'
 import type { User } from '../../types'
 import { format } from 'date-fns'
+
+interface PatientFormData {
+  name: string
+  phone: string
+  email: string
+  company: string
+}
+
+function PatientForm({
+  patient,
+  companyOptions,
+  onSave,
+  onCancel,
+}: {
+  patient: User | null
+  companyOptions: string[]
+  onSave: (p: User) => void
+  onCancel: () => void
+}) {
+  const isNew = patient === null
+  const [serverError, setServerError] = useState('')
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<PatientFormData>({
+    defaultValues: patient
+      ? {
+          name: patient.name,
+          phone: patient.phone,
+          email: patient.email ?? '',
+          company: patient.company ?? '',
+        }
+      : { name: '', phone: '', email: '', company: '' },
+  })
+
+  async function onSubmit(data: PatientFormData) {
+    setServerError('')
+    try {
+      const payload = {
+        name: data.name.trim(),
+        phone: data.phone,
+        email: data.email.trim() || undefined,
+        company: data.company.trim() || undefined,
+      }
+      const record = isNew
+        ? await registerPatient(payload)
+        : await updatePatient(patient.uid, payload)
+      onSave({
+        uid: record.uid,
+        name: record.name,
+        phone: record.phone,
+        email: record.email,
+        company: record.company,
+        role: 'patient',
+        createdAt: patient?.createdAt as User['createdAt'],
+      })
+    } catch (err: unknown) {
+      setServerError(err instanceof Error ? err.message : 'Something went wrong.')
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {serverError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+          {serverError}
+        </div>
+      )}
+
+      <Input
+        label="Full Name"
+        placeholder="Ravi Kumar"
+        error={errors.name?.message}
+        {...register('name', { required: 'Name is required' })}
+      />
+      <Input
+        label="Phone Number"
+        type="tel"
+        placeholder="9876543210"
+        helperText="Indian mobile number (10 digits) — used for phone/OTP login"
+        error={errors.phone?.message}
+        {...register('phone', {
+          required: 'Phone number is required',
+          pattern: {
+            value: /^[6-9]\d{9}$/,
+            message: 'Enter a valid 10-digit Indian mobile number',
+          },
+        })}
+      />
+      <Input
+        label="Email (optional)"
+        type="email"
+        placeholder="you@example.com"
+        error={errors.email?.message}
+        {...register('email', {
+          pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' },
+        })}
+      />
+      <div>
+        <Input
+          label="Company / Organization (optional)"
+          list="company-options"
+          placeholder="e.g. St Joseph English Hr Sec School"
+          {...register('company')}
+        />
+        <datalist id="company-options">
+          {companyOptions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      </div>
+
+      <div className="flex gap-3 pt-2 border-t border-slate-100">
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={isSubmitting} className="flex-1">
+          {isNew ? 'Register Patient' : 'Save Changes'}
+        </Button>
+      </div>
+    </form>
+  )
+}
 
 export default function AdminPatientsPage() {
   const { logOut } = useAuth()
   const [patients, setPatients] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [editPatient, setEditPatient] = useState<User | 'new' | null>(null)
 
   useEffect(() => {
     getAllPatients()
@@ -25,13 +156,26 @@ export default function AdminPatientsPage() {
   const filtered = patients.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.email.toLowerCase().includes(search.toLowerCase()) ||
-      p.phone.includes(search),
+      (p.email ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      p.phone.includes(search) ||
+      (p.company ?? '').toLowerCase().includes(search.toLowerCase()),
   )
+
+  const companyOptions = Array.from(
+    new Set(patients.map((p) => p.company).filter((c): c is string => !!c)),
+  ).sort()
 
   async function handleLogout() {
     await logOut()
     window.location.href = '/'
+  }
+
+  function handleSaved(saved: User) {
+    setPatients((prev) => {
+      const exists = prev.find((p) => p.uid === saved.uid)
+      return exists ? prev.map((p) => (p.uid === saved.uid ? saved : p)) : [saved, ...prev]
+    })
+    setEditPatient(null)
   }
 
   return (
@@ -67,11 +211,14 @@ export default function AdminPatientsPage() {
           ))}
         </div>
 
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
             <Users className="h-6 w-6 text-teal-500" /> Patients
             <span className="text-slate-400 text-lg font-normal ml-1">({patients.length})</span>
           </h1>
+          <Button size="sm" onClick={() => setEditPatient('new')}>
+            <UserPlus className="h-4 w-4 mr-1" /> Register Patient
+          </Button>
         </div>
 
         {/* Search */}
@@ -81,7 +228,7 @@ export default function AdminPatientsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email or phone..."
+            placeholder="Search by name, email, phone or company..."
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
@@ -105,9 +252,11 @@ export default function AdminPatientsPage() {
                   <th className="text-left px-6 py-3 font-semibold">Name</th>
                   <th className="text-left px-6 py-3 font-semibold hidden sm:table-cell">Email</th>
                   <th className="text-left px-6 py-3 font-semibold hidden md:table-cell">Phone</th>
+                  <th className="text-left px-6 py-3 font-semibold hidden md:table-cell">Company</th>
                   <th className="text-left px-6 py-3 font-semibold hidden lg:table-cell">
                     Registered
                   </th>
+                  <th className="px-6 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -122,15 +271,23 @@ export default function AdminPatientsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-3 text-slate-600 hidden sm:table-cell">
-                      {patient.email}
+                      {patient.email || '—'}
                     </td>
                     <td className="px-6 py-3 text-slate-600 hidden md:table-cell">
                       {patient.phone || '—'}
+                    </td>
+                    <td className="px-6 py-3 text-slate-600 hidden md:table-cell">
+                      {patient.company || '—'}
                     </td>
                     <td className="px-6 py-3 text-slate-500 hidden lg:table-cell">
                       {patient.createdAt?.toDate
                         ? format(patient.createdAt.toDate(), 'dd MMM yyyy')
                         : '—'}
+                    </td>
+                    <td className="px-6 py-3 text-right">
+                      <Button size="sm" variant="outline" onClick={() => setEditPatient(patient)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -141,6 +298,22 @@ export default function AdminPatientsPage() {
       </div>
 
       <Footer />
+
+      <Modal
+        isOpen={editPatient !== null}
+        onClose={() => setEditPatient(null)}
+        title={editPatient === 'new' ? 'Register Patient' : `Edit: ${(editPatient as User)?.name}`}
+        size="md"
+      >
+        {editPatient !== null && (
+          <PatientForm
+            patient={editPatient === 'new' ? null : (editPatient as User)}
+            companyOptions={companyOptions}
+            onSave={handleSaved}
+            onCancel={() => setEditPatient(null)}
+          />
+        )}
+      </Modal>
     </div>
   )
 }

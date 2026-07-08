@@ -11,6 +11,7 @@ export interface User {
   phone: string
   dob?: string
   address?: string
+  company?: string
   role: UserRole
   createdAt: Timestamp
 }

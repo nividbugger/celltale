@@ -50,7 +50,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900">My Profile</h1>
-            <p className="text-slate-500 text-sm">{userProfile?.email}</p>
+            <p className="text-slate-500 text-sm">{userProfile?.email || userProfile?.phone}</p>
           </div>
         </div>
 

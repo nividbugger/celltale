@@ -149,14 +149,11 @@ export default function AdminInvoiceEditorPage() {
   }
 
   function handlePrint() {
+    const printHtml = buildInvoiceHtml(draftInvoice, clinic, { autoPrint: true })
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
-    printWindow.document.write(previewHtml)
+    printWindow.document.write(printHtml)
     printWindow.document.close()
-    printWindow.onload = () => {
-      printWindow.focus()
-      printWindow.print()
-    }
   }
 
   if (loading) {

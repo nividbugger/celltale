@@ -42,7 +42,11 @@ export function invoiceTotals(invoice: InvoiceDraft) {
   return { totalQuantity, totalDiscount, totalAmount, balance }
 }
 
-export function buildInvoiceHtml(invoice: InvoiceDraft, clinic: ClinicSettings): string {
+export function buildInvoiceHtml(
+  invoice: InvoiceDraft,
+  clinic: ClinicSettings,
+  options?: { autoPrint?: boolean },
+): string {
   const { totalQuantity, totalDiscount, totalAmount, balance } = invoiceTotals(invoice)
 
   const rows = invoice.lineItems
@@ -261,6 +265,15 @@ export function buildInvoiceHtml(invoice: InvoiceDraft, clinic: ClinicSettings):
     <div class="sign-space"></div>
     <div class="sig-label">Authorized Signatory</div>
   </div>
+  ${
+    options?.autoPrint
+      ? `<script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 300);
+    };
+  </script>`
+      : ''
+  }
 </body>
 </html>`
 }

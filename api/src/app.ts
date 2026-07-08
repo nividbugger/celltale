@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit'
 import { config } from './config'
 import emailRouter from './routes/email'
 import paymentsRouter from './routes/payments'
+import adminPatientsRouter from './routes/adminPatients'
 
 export const app = express()
 
@@ -61,6 +62,7 @@ app.use(globalLimiter)
 //   { "source": "/api/**", "function": "api" }
 app.use('/api/email', emailRouter)
 app.use('/api/payments', paymentsRouter)
+app.use('/api/admin/patients', adminPatientsRouter)
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
