@@ -22,8 +22,8 @@ export interface User {
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
-export interface TestKey {
-  key: string
+export interface TestParameter {
+  parameter: string
   unit: string
   biologicalReference: string
 }
@@ -32,7 +32,7 @@ export interface Test {
   id: string
   testId: string
   name: string
-  keys: TestKey[]
+  parameters: TestParameter[]
   createdAt: Timestamp
   updatedAt: Timestamp
 }

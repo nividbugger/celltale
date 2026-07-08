@@ -11,13 +11,12 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllTests, createTest, updateTest, deleteTest } from '../../lib/firestore'
-import type { Test, TestKey } from '../../types'
+import type { Test, TestParameter } from '../../types'
 import { format } from 'date-fns'
 
 interface TestFormData {
-  testId: string
   name: string
-  keys: TestKey[]
+  parameters: TestParameter[]
 }
 
 function TestForm({
@@ -40,31 +39,29 @@ function TestForm({
   } = useForm<TestFormData>({
     defaultValues: test
       ? {
-          testId: test.testId,
           name: test.name,
-          keys: test.keys,
+          parameters: test.parameters,
         }
-      : { testId: '', name: '', keys: [] },
+      : { name: '', parameters: [] },
   })
 
   const { fields, append, remove } = useFieldArray({
     control,
-    name: 'keys',
+    name: 'parameters',
   })
 
   async function onSubmit(data: TestFormData) {
     setServerError('')
     try {
-      if (data.keys.length === 0) {
-        setServerError('At least one key is required')
+      if (data.parameters.length === 0) {
+        setServerError('At least one parameter is required')
         return
       }
 
-      const testId = data.testId.trim() || `TEST-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
       const payload = {
-        testId,
+        testId: `TEST-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
         name: data.name.trim(),
-        keys: data.keys,
+        parameters: data.parameters,
       }
 
       if (isNew) {
@@ -77,11 +74,12 @@ function TestForm({
           updatedAt: { toDate: () => now } as any,
         })
       } else {
-        await updateTest(test.id, payload)
+        await updateTest(test.id, { name: payload.name, parameters: payload.parameters })
         const now = new Date()
         onSave({
           ...test,
-          ...payload,
+          name: payload.name,
+          parameters: payload.parameters,
           updatedAt: { toDate: () => now } as any,
         })
       }
@@ -99,12 +97,6 @@ function TestForm({
       )}
 
       <Input
-        label="Test ID (auto-generates if empty)"
-        placeholder="e.g. TEST-001"
-        {...register('testId')}
-      />
-
-      <Input
         label="Test Name"
         placeholder="e.g. Blood Test"
         error={errors.name?.message}
@@ -113,27 +105,27 @@ function TestForm({
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="text-sm font-medium text-slate-700">Keys</label>
+          <label className="text-sm font-medium text-slate-700">Parameters</label>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => append({ key: '', unit: '', biologicalReference: '' })}
+            onClick={() => append({ parameter: '', unit: '', biologicalReference: '' })}
           >
-            <Plus className="h-3 w-3 mr-1" /> Add Key
+            <Plus className="h-3 w-3 mr-1" /> Add Parameter
           </Button>
         </div>
 
         {fields.length === 0 ? (
-          <p className="text-sm text-slate-500">No keys added yet. Click "Add Key" to configure test parameters.</p>
+          <p className="text-sm text-slate-500">No parameters added yet. Click "Add Parameter" to configure test parameters.</p>
         ) : (
           <div className="space-y-3">
             {fields.map((field, index) => (
               <div key={field.id} className="flex gap-2 items-end p-3 bg-slate-50 rounded-lg">
                 <div className="flex-1 space-y-1">
-                  <label className="text-xs font-medium text-slate-600">Key Name</label>
+                  <label className="text-xs font-medium text-slate-600">Parameter Name</label>
                   <input
-                    {...register(`keys.${index}.key`, { required: 'Key name is required' })}
+                    {...register(`parameters.${index}.parameter`, { required: 'Parameter name is required' })}
                     placeholder="e.g. hemoglobin"
                     className="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
@@ -141,7 +133,7 @@ function TestForm({
                 <div className="flex-1 space-y-1">
                   <label className="text-xs font-medium text-slate-600">Unit</label>
                   <input
-                    {...register(`keys.${index}.unit`, { required: 'Unit is required' })}
+                    {...register(`parameters.${index}.unit`, { required: 'Unit is required' })}
                     placeholder="e.g. g/dL"
                     className="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
@@ -149,7 +141,7 @@ function TestForm({
                 <div className="flex-1 space-y-1">
                   <label className="text-xs font-medium text-slate-600">Biological Reference</label>
                   <input
-                    {...register(`keys.${index}.biologicalReference`, { required: 'Reference is required' })}
+                    {...register(`parameters.${index}.biologicalReference`, { required: 'Reference is required' })}
                     placeholder="e.g. 12-16"
                     className="w-full rounded border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
@@ -301,7 +293,7 @@ export default function TestsPage() {
                 <tr className="border-b border-slate-100 text-slate-400 text-xs uppercase">
                   <th className="text-left px-6 py-3 font-semibold">Test ID</th>
                   <th className="text-left px-6 py-3 font-semibold">Name</th>
-                  <th className="text-left px-6 py-3 font-semibold">Keys</th>
+                  <th className="text-left px-6 py-3 font-semibold">Parameters</th>
                   <th className="text-left px-6 py-3 font-semibold hidden lg:table-cell">Created</th>
                   <th className="px-6 py-3" />
                 </tr>
@@ -313,9 +305,9 @@ export default function TestsPage() {
                     <td className="px-6 py-3 font-medium text-slate-900">{test.name}</td>
                     <td className="px-6 py-3 text-slate-600">
                       <span className="inline-flex items-center gap-1 flex-wrap">
-                        {test.keys.map((k, i) => (
+                        {test.parameters.map((p, i) => (
                           <span key={i} className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs">
-                            {k.key} <span className="text-slate-500">({k.unit})</span>
+                            {p.parameter} <span className="text-slate-500">({p.unit})</span>
                           </span>
                         ))}
                       </span>
