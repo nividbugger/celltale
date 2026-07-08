@@ -26,6 +26,7 @@ import type {
   Package,
   ClinicSettings,
   Invoice,
+  Test,
 } from '../types'
 import { DEFAULT_CLINIC_SETTINGS } from '../types'
 
@@ -274,6 +275,31 @@ export async function updateInvoice(
 
 export async function deleteInvoice(id: string): Promise<void> {
   await deleteDoc(doc(db, 'invoices', id))
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────
+
+export async function getAllTests(): Promise<Test[]> {
+  const q = query(collection(db, 'tests'), orderBy('createdAt', 'desc'))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Test)
+}
+
+export async function createTest(data: Omit<Test, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  const ref = await addDoc(collection(db, 'tests'), {
+    ...data,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function updateTest(id: string, data: Partial<Omit<Test, 'id' | 'createdAt'>>): Promise<void> {
+  await updateDoc(doc(db, 'tests', id), { ...data, updatedAt: serverTimestamp() })
+}
+
+export async function deleteTest(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'tests', id))
 }
 
 // Re-export Timestamp for convenience

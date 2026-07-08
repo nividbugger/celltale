@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { Users, Search, UserPlus, Pencil } from 'lucide-react'
+import { Users, Search, UserPlus, Pencil, Eye } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Modal } from '../../components/ui/Modal'
@@ -9,6 +9,8 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
+import { PatientBarcodePrintModal } from '../../components/admin/PatientBarcodePrintModal'
+import { PatientDetailModal } from '../../components/admin/PatientDetailModal'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllPatients } from '../../lib/firestore'
 import { registerPatient, updatePatient } from '../../lib/api'
@@ -20,6 +22,9 @@ interface PatientFormData {
   phone: string
   email: string
   company: string
+  age: string
+  gender: string
+  additionalInfo: string
 }
 
 function PatientForm({
@@ -47,8 +52,11 @@ function PatientForm({
           phone: patient.phone,
           email: patient.email ?? '',
           company: patient.company ?? '',
+          age: patient.age ? String(patient.age) : '',
+          gender: patient.gender ?? '',
+          additionalInfo: patient.additionalInfo ?? '',
         }
-      : { name: '', phone: '', email: '', company: '' },
+      : { name: '', phone: '', email: '', company: '', age: '', gender: '', additionalInfo: '' },
   })
 
   async function onSubmit(data: PatientFormData) {
@@ -59,6 +67,9 @@ function PatientForm({
         phone: data.phone,
         email: data.email.trim() || undefined,
         company: data.company.trim() || undefined,
+        age: data.age ? parseInt(data.age, 10) : undefined,
+        gender: data.gender.trim() || undefined,
+        additionalInfo: data.additionalInfo.trim() || undefined,
       }
       const record = isNew
         ? await registerPatient(payload)
@@ -69,6 +80,9 @@ function PatientForm({
         phone: record.phone,
         email: record.email,
         company: record.company,
+        age: record.age,
+        gender: record.gender,
+        additionalInfo: record.additionalInfo,
         role: 'patient',
         createdAt: patient?.createdAt as User['createdAt'],
       })
@@ -127,6 +141,29 @@ function PatientForm({
           ))}
         </datalist>
       </div>
+      <Input
+        label="Age (optional)"
+        type="number"
+        placeholder="25"
+        error={errors.age?.message}
+        {...register('age', {
+          pattern: { value: /^\d+$/, message: 'Age must be a valid number' },
+        })}
+      />
+      <Input
+        label="Gender (optional)"
+        placeholder="e.g. Male, Female, Other"
+        {...register('gender')}
+      />
+      <div>
+        <label className="text-sm font-medium text-slate-700 block mb-1">Additional Information (optional)</label>
+        <textarea
+          {...register('additionalInfo')}
+          rows={3}
+          placeholder="Any additional notes or information"
+          className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+        />
+      </div>
 
       <div className="flex gap-3 pt-2 border-t border-slate-100">
         <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
@@ -146,6 +183,8 @@ export default function AdminPatientsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [editPatient, setEditPatient] = useState<User | 'new' | null>(null)
+  const [showQRCode, setShowQRCode] = useState<User | null>(null)
+  const [viewPatient, setViewPatient] = useState<User | null>(null)
 
   useEffect(() => {
     getAllPatients()
@@ -176,6 +215,7 @@ export default function AdminPatientsPage() {
       return exists ? prev.map((p) => (p.uid === saved.uid ? saved : p)) : [saved, ...prev]
     })
     setEditPatient(null)
+    setShowQRCode(saved)
   }
 
   return (
@@ -200,11 +240,16 @@ export default function AdminPatientsPage() {
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
             { to: '/admin/invoices', label: 'Invoices' },
+            { to: '/admin/tests', label: 'Tests' },
           ].map((l) => (
             <Link
               key={l.to}
               to={l.to}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:border-teal-400 hover:text-teal-600 transition-colors"
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                l.to === '/admin/patients'
+                  ? 'bg-teal-100 text-teal-700 border border-teal-300'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:border-teal-400 hover:text-teal-600'
+              }`}
             >
               {l.label}
             </Link>
@@ -285,9 +330,14 @@ export default function AdminPatientsPage() {
                         : '—'}
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <Button size="sm" variant="outline" onClick={() => setEditPatient(patient)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" variant="outline" onClick={() => setViewPatient(patient)} title="View details">
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditPatient(patient)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -314,6 +364,10 @@ export default function AdminPatientsPage() {
           />
         )}
       </Modal>
+
+      {showQRCode && <PatientBarcodePrintModal isOpen={showQRCode !== null} onClose={() => setShowQRCode(null)} patient={showQRCode} />}
+
+      {viewPatient && <PatientDetailModal isOpen={viewPatient !== null} onClose={() => setViewPatient(null)} patient={viewPatient} />}
     </div>
   )
 }

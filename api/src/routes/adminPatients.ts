@@ -17,6 +17,9 @@ interface PatientInput {
   phone: string
   email: string | null
   company: string | null
+  age: number | null
+  gender: string | null
+  additionalInfo: string | null
 }
 
 /** Validates and normalizes the request body shared by create and update. */
@@ -24,7 +27,7 @@ function parsePatientInput(
   body: unknown,
   { requireFields }: { requireFields: boolean },
 ): { data: PatientInput } | { error: string } {
-  const { name, phone, email, company } = (body ?? {}) as Record<string, unknown>
+  const { name, phone, email, company, age, gender, additionalInfo } = (body ?? {}) as Record<string, unknown>
 
   if (requireFields || name !== undefined) {
     if (typeof name !== 'string' || !name.trim()) {
@@ -44,6 +47,15 @@ function parsePatientInput(
   if (company !== undefined && company !== null && typeof company !== 'string') {
     return { error: 'company must be a string' }
   }
+  if (age !== undefined && age !== null && typeof age !== 'number') {
+    return { error: 'age must be a number' }
+  }
+  if (gender !== undefined && gender !== null && typeof gender !== 'string') {
+    return { error: 'gender must be a string' }
+  }
+  if (additionalInfo !== undefined && additionalInfo !== null && typeof additionalInfo !== 'string') {
+    return { error: 'additionalInfo must be a string' }
+  }
 
   return {
     data: {
@@ -51,6 +63,9 @@ function parsePatientInput(
       phone: typeof phone === 'string' ? phone : '',
       email: (email as string) || null,
       company: (company as string)?.trim() || null,
+      age: (age as number) || null,
+      gender: (gender as string)?.trim() || null,
+      additionalInfo: (additionalInfo as string)?.trim() || null,
     },
   }
 }
@@ -93,18 +108,22 @@ router.post(
         ...(email ? { email } : {}),
       })
 
-      const userDoc = {
+      const userDoc: any = {
         uid: authUser.uid,
         name,
         phone,
         email: email ?? '',
-        company: company ?? undefined,
+        collectionTimestamp: admin.firestore.FieldValue.serverTimestamp(),
         role: 'patient' as const,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       }
+      if (company) userDoc.company = company
+      if (parsed.data.age) userDoc.age = parsed.data.age
+      if (parsed.data.gender) userDoc.gender = parsed.data.gender
+      if (parsed.data.additionalInfo) userDoc.additionalInfo = parsed.data.additionalInfo
       await admin.firestore().doc(`users/${authUser.uid}`).set(userDoc)
 
-      res.status(201).json({ ...userDoc, createdAt: null })
+      res.status(201).json({ ...userDoc, createdAt: null, collectionTimestamp: null })
     } catch (err) {
       console.error('[POST /api/admin/patients] createUser failed', err)
       res.status(500).json({ error: 'Failed to register patient' })
@@ -136,6 +155,9 @@ router.patch(
     const hasPhone = typeof body.phone === 'string'
     const hasEmail = body.email !== undefined
     const hasCompany = body.company !== undefined
+    const hasAge = body.age !== undefined
+    const hasGender = body.gender !== undefined
+    const hasAdditionalInfo = body.additionalInfo !== undefined
 
     const userRef = admin.firestore().doc(`users/${uid}`)
     const existing = await userRef.get()
@@ -173,6 +195,9 @@ router.patch(
     if (hasPhone) updates.phone = parsed.data.phone
     if (hasEmail) updates.email = parsed.data.email ?? ''
     if (hasCompany) updates.company = parsed.data.company ?? admin.firestore.FieldValue.delete()
+    if (hasAge) updates.age = parsed.data.age ?? admin.firestore.FieldValue.delete()
+    if (hasGender) updates.gender = parsed.data.gender ?? admin.firestore.FieldValue.delete()
+    if (hasAdditionalInfo) updates.additionalInfo = parsed.data.additionalInfo ?? admin.firestore.FieldValue.delete()
 
     try {
       await userRef.update(updates)
