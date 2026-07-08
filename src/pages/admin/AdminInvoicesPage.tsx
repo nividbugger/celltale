@@ -82,6 +82,7 @@ export default function AdminInvoicesPage() {
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
             { to: '/admin/invoices', label: 'Invoices' },
+            { to: '/admin/tests', label: 'Tests' },
           ].map((l) => (
             <Link
               key={l.to}

@@ -113,6 +113,9 @@ export interface RegisterPatientRequest {
   phone: string
   email?: string
   company?: string
+  age?: number
+  gender?: string
+  additionalInfo?: string
 }
 
 export interface UpdatePatientRequest {
@@ -120,6 +123,9 @@ export interface UpdatePatientRequest {
   phone?: string
   email?: string
   company?: string
+  age?: number
+  gender?: string
+  additionalInfo?: string
 }
 
 export interface AdminPatientRecord {
@@ -128,6 +134,9 @@ export interface AdminPatientRecord {
   phone: string
   email: string
   company?: string
+  age?: number
+  gender?: string
+  additionalInfo?: string
   role: 'patient'
 }
 

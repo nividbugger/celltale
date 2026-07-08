@@ -12,8 +12,29 @@ export interface User {
   dob?: string
   address?: string
   company?: string
+  age?: number
+  gender?: string
+  additionalInfo?: string
+  collectionTimestamp?: Timestamp
   role: UserRole
   createdAt: Timestamp
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────
+
+export interface TestParameter {
+  parameter: string
+  unit: string
+  biologicalReference: string
+}
+
+export interface Test {
+  id: string
+  testId: string
+  name: string
+  parameters: TestParameter[]
+  createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 // ─── Appointments ─────────────────────────────────────────────────────────
