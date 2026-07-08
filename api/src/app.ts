@@ -32,7 +32,7 @@ app.use(
         callback(new Error(`CORS: origin '${origin}' not allowed`))
       }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type'],
     credentials: true,
     maxAge: 3600,

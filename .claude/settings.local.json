@@ -13,7 +13,9 @@
       "Bash(git -C /Users/niviranganathan/Desktop/personal/cell_tale log --all --oneline --grep=\"invoice\\\\|billing\\\\|cost\\\\|price\" -i)",
       "Bash(npm run *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(firebase functions:log --limit=50)",
+      "Bash(firebase functions:log)"
     ]
   }
 }
