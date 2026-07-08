@@ -16,6 +16,10 @@ export const onUserCreated = onDocumentCreated(
     // Only send to patients, not admin accounts
     if (user.role !== 'patient') return
 
+    // Phone-only patients (admin-registered or self-service phone sign-up)
+    // may have no email on file — nothing to send to.
+    if (!user.email) return
+
     await sendEmail({
       to: user.email,
       subject: `Welcome to ${config.app.name}!`,

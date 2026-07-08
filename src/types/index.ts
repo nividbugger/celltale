@@ -11,6 +11,7 @@ export interface User {
   phone: string
   dob?: string
   address?: string
+  company?: string
   role: UserRole
   createdAt: Timestamp
 }
@@ -216,6 +217,57 @@ export const STATUS_COLORS: Record<AppointmentStatus, string> = {
   Completed: 'bg-green-100 text-green-800',
   Cancelled: 'bg-red-100 text-red-800',
   Deleted: 'bg-slate-100 text-slate-500',
+}
+
+// ─── Clinic Settings ──────────────────────────────────────────────────────
+
+export interface ClinicSettings {
+  name: string
+  tagline?: string
+  logoUrl?: string
+  addressLines: string[]
+  phone: string
+  email: string
+  gstin: string
+  state: string
+  bankName: string
+  bankAccountNumber: string
+  bankIfsc: string
+}
+
+export const DEFAULT_CLINIC_SETTINGS: ClinicSettings = {
+  name: 'Cell Tale Diagnostics',
+  tagline: 'Every cell in you tells a story',
+  addressLines: ['First Floor B-3 Industrial Estate Puducherry'],
+  phone: '8838720883',
+  email: 'celltalediagnostics@gmail.com',
+  gstin: '34HCIPS0270R1ZW',
+  state: '34-Puducherry',
+  bankName: 'City Union Bank',
+  bankAccountNumber: '510909010300011',
+  bankIfsc: 'CIUB0000678',
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────
+
+export interface InvoiceLineItem {
+  itemName: string
+  hsnSac?: string
+  quantity: number
+  pricePerUnit: number
+  discountPercent: number
+}
+
+export interface Invoice {
+  id: string
+  invoiceNumber: number
+  date: string
+  billToName: string
+  billToContact?: string
+  lineItems: InvoiceLineItem[]
+  receivedAmount: number
+  createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 // ─── Form Data Types ──────────────────────────────────────────────────────

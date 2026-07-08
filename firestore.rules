@@ -32,6 +32,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /invoices/{invoiceId} {
+      allow read, write: if isAdmin();
+    }
+
     // Email queue: patients/admin can write (enqueue), nobody can read from client
     // Only the Firebase Admin SDK (GitHub Actions service account) reads this collection
     match /mailQueue/{docId} {

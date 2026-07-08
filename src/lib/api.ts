@@ -106,6 +106,50 @@ export async function getEmailQueue(
   return apiFetch(`/email/queue${qs ? `?${qs}` : ''}`)
 }
 
+// ─── Admin: Patients API ──────────────────────────────────────────────────────
+
+export interface RegisterPatientRequest {
+  name: string
+  phone: string
+  email?: string
+  company?: string
+}
+
+export interface UpdatePatientRequest {
+  name?: string
+  phone?: string
+  email?: string
+  company?: string
+}
+
+export interface AdminPatientRecord {
+  uid: string
+  name: string
+  phone: string
+  email: string
+  company?: string
+  role: 'patient'
+}
+
+/** Admin: register a patient met in person (e.g. a company/school camp) by name + phone. */
+export async function registerPatient(payload: RegisterPatientRequest): Promise<AdminPatientRecord> {
+  return apiFetch('/admin/patients', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** Admin: edit an existing patient's details. */
+export async function updatePatient(
+  uid: string,
+  payload: UpdatePatientRequest,
+): Promise<AdminPatientRecord> {
+  return apiFetch(`/admin/patients/${encodeURIComponent(uid)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
 // ─── Payments API (stubs — will be populated when gateway is integrated) ──────
 
 export interface CreateOrderRequest {

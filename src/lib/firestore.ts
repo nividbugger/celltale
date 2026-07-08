@@ -14,21 +14,33 @@ import {
   serverTimestamp,
   limit,
   getCountFromServer,
+  runTransaction,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { User, Appointment, AppointmentStatus, Report, TestValue, Package } from '../types'
+import type {
+  User,
+  Appointment,
+  AppointmentStatus,
+  Report,
+  TestValue,
+  Package,
+  ClinicSettings,
+  Invoice,
+} from '../types'
+import { DEFAULT_CLINIC_SETTINGS } from '../types'
 
 // ─── Users ────────────────────────────────────────────────────────────────
 
 export async function createUserDocument(
   uid: string,
-  data: { name: string; email: string; phone: string },
+  data: { name: string; phone: string; email?: string; company?: string },
 ): Promise<void> {
   await setDoc(doc(db, 'users', uid), {
     uid,
     name: data.name,
-    email: data.email,
+    email: data.email ?? '',
     phone: data.phone,
+    ...(data.company ? { company: data.company } : {}),
     role: 'patient',
     createdAt: serverTimestamp(),
   })
@@ -206,6 +218,62 @@ export async function reorderPackages(packages: Package[]): Promise<void> {
   await Promise.all(
     packages.map((pkg, i) => setDoc(doc(db, 'packages', pkg.id), { ...pkg, order: i })),
   )
+}
+
+// ─── Clinic Settings ────────────────────────────────────────────────────────
+
+export async function getClinicSettings(): Promise<ClinicSettings> {
+  const snap = await getDoc(doc(db, 'config', 'clinicSettings'))
+  return snap.exists() ? (snap.data() as ClinicSettings) : DEFAULT_CLINIC_SETTINGS
+}
+
+export async function saveClinicSettings(data: ClinicSettings): Promise<void> {
+  await setDoc(doc(db, 'config', 'clinicSettings'), data)
+}
+
+// ─── Invoices ───────────────────────────────────────────────────────────────
+
+export async function getNextInvoiceNumber(): Promise<number> {
+  const counterRef = doc(db, 'config', 'invoiceCounter')
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(counterRef)
+    const next = (snap.exists() ? (snap.data().lastNumber as number) : 0) + 1
+    tx.set(counterRef, { lastNumber: next })
+    return next
+  })
+}
+
+export async function createInvoice(
+  data: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>,
+): Promise<string> {
+  const ref = await addDoc(collection(db, 'invoices'), {
+    ...data,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function getAllInvoices(): Promise<Invoice[]> {
+  const q = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'))
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Invoice)
+}
+
+export async function getInvoiceById(id: string): Promise<Invoice | null> {
+  const snap = await getDoc(doc(db, 'invoices', id))
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Invoice) : null
+}
+
+export async function updateInvoice(
+  id: string,
+  data: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>,
+): Promise<void> {
+  await updateDoc(doc(db, 'invoices', id), { ...data, updatedAt: serverTimestamp() })
+}
+
+export async function deleteInvoice(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'invoices', id))
 }
 
 // Re-export Timestamp for convenience
