@@ -10,7 +10,8 @@ import { Input } from '../../components/ui/Input'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllTests, createTest, updateTest, deleteTest } from '../../lib/firestore'
+import { getAllTests } from '../../lib/firestore'
+import { createTest, updateTest, deleteTest } from '../../lib/api'
 import type { Test, TestParameter } from '../../types'
 import { format } from 'date-fns'
 
@@ -58,28 +59,32 @@ function TestForm({
         return
       }
 
-      const payload = {
-        testId: `TEST-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
-        name: data.name.trim(),
-        parameters: data.parameters,
-      }
-
       if (isNew) {
-        const id = await createTest(payload)
+        const result = await createTest({
+          name: data.name.trim(),
+          parameters: data.parameters,
+        })
         const now = new Date()
         onSave({
-          id,
-          ...payload,
+          id: result.id,
+          testId: result.testId,
+          name: result.name,
+          parameters: result.parameters,
           createdAt: { toDate: () => now } as any,
           updatedAt: { toDate: () => now } as any,
         })
       } else {
-        await updateTest(test.id, { name: payload.name, parameters: payload.parameters })
+        const result = await updateTest(test.id, {
+          name: data.name.trim(),
+          parameters: data.parameters,
+        })
         const now = new Date()
         onSave({
-          ...test,
-          name: payload.name,
-          parameters: payload.parameters,
+          id: result.id,
+          testId: result.testId,
+          name: result.name,
+          parameters: result.parameters,
+          createdAt: test.createdAt,
           updatedAt: { toDate: () => now } as any,
         })
       }
