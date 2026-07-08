@@ -117,10 +117,10 @@ router.post(
         role: 'patient' as const,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       }
-      if (company) userDoc.company = company
+      if (company && company !== '') userDoc.company = company
       if (parsed.data.age) userDoc.age = parsed.data.age
-      if (parsed.data.gender) userDoc.gender = parsed.data.gender
-      if (parsed.data.additionalInfo) userDoc.additionalInfo = parsed.data.additionalInfo
+      if (parsed.data.gender && parsed.data.gender !== '') userDoc.gender = parsed.data.gender
+      if (parsed.data.additionalInfo && parsed.data.additionalInfo !== '') userDoc.additionalInfo = parsed.data.additionalInfo
       await admin.firestore().doc(`users/${authUser.uid}`).set(userDoc)
 
       res.status(201).json({ ...userDoc, createdAt: null, collectionTimestamp: null })

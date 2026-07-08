@@ -71,7 +71,11 @@ router.post('/', verifyAuth, requireAdmin, async (req: AuthRequest, res) => {
     const testData = {
       testId,
       name: parsed.data.name,
-      parameters: parsed.data.parameters,
+      parameters: parsed.data.parameters.map((p: any) => ({
+        parameter: p.parameter || '',
+        unit: p.unit || '',
+        biologicalReference: p.biologicalReference || '',
+      })),
       createdAt: now,
       updatedAt: now,
     }
@@ -101,7 +105,11 @@ router.patch('/:testId', verifyAuth, requireAdmin, async (req: AuthRequest, res)
     const now = admin.firestore.FieldValue.serverTimestamp()
     const updateData = {
       name: parsed.data.name,
-      parameters: parsed.data.parameters,
+      parameters: parsed.data.parameters.map((p: any) => ({
+        parameter: p.parameter || '',
+        unit: p.unit || '',
+        biologicalReference: p.biologicalReference || '',
+      })),
       updatedAt: now,
     }
 
