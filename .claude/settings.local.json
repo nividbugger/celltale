@@ -15,7 +15,10 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(firebase functions:log --limit=50)",
-      "Bash(firebase functions:log)"
+      "Bash(firebase functions:log)",
+      "Bash(grep -o \"getAllInvoices[^}]\\\\{0,200\\\\}\" dist/assets/index-D-YbBG-C.js)",
+      "Bash(firebase --version)",
+      "Bash(firebase projects:list)"
     ]
   }
 }

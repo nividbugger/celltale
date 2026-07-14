@@ -84,9 +84,9 @@ export async function getAppointmentsByPatient(patientId: string): Promise<Appoi
 }
 
 export async function getAllAppointments(): Promise<Appointment[]> {
-  const q = query(collection(db, 'appointments'), orderBy('createdAt', 'desc'))
-  const snap = await getDocs(q)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Appointment)
+  const snap = await getDocs(collection(db, 'appointments'))
+  const appointments = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Appointment)
+  return appointments.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
 }
 
 export async function getAppointmentById(id: string): Promise<Appointment | null> {
@@ -256,9 +256,9 @@ export async function createInvoice(
 }
 
 export async function getAllInvoices(): Promise<Invoice[]> {
-  const q = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'))
-  const snap = await getDocs(q)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Invoice)
+  const snap = await getDocs(collection(db, 'invoices'))
+  const invoices = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Invoice)
+  return invoices.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
 }
 
 export async function getInvoiceById(id: string): Promise<Invoice | null> {
@@ -280,9 +280,9 @@ export async function deleteInvoice(id: string): Promise<void> {
 // ─── Tests ────────────────────────────────────────────────────────────────
 
 export async function getAllTests(): Promise<Test[]> {
-  const q = query(collection(db, 'tests'), orderBy('createdAt', 'desc'))
-  const snap = await getDocs(q)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Test)
+  const snap = await getDocs(collection(db, 'tests'))
+  const tests = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Test)
+  return tests.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
 }
 
 export async function createTest(data: Omit<Test, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
