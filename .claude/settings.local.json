@@ -18,7 +18,8 @@
       "Bash(firebase functions:log)",
       "Bash(grep -o \"getAllInvoices[^}]\\\\{0,200\\\\}\" dist/assets/index-D-YbBG-C.js)",
       "Bash(firebase --version)",
-      "Bash(firebase projects:list)"
+      "Bash(firebase projects:list)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

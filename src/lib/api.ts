@@ -170,11 +170,13 @@ export interface TestParameter {
 export interface CreateTestRequest {
   name: string
   parameters: TestParameter[]
+  cost?: number
 }
 
 export interface UpdateTestRequest {
   name?: string
   parameters?: TestParameter[]
+  cost?: number
 }
 
 export interface AdminTestRecord {
@@ -182,6 +184,7 @@ export interface AdminTestRecord {
   testId: string
   name: string
   parameters: TestParameter[]
+  cost?: number
 }
 
 /** Admin: create a new test configuration. */

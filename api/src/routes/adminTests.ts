@@ -14,10 +14,11 @@ interface TestParameter {
 interface TestInput {
   name: string
   parameters: TestParameter[]
+  cost?: number
 }
 
 function parseTestInput(body: unknown): { data: TestInput } | { error: string } {
-  const { name, parameters } = (body ?? {}) as Record<string, unknown>
+  const { name, parameters, cost } = (body ?? {}) as Record<string, unknown>
 
   if (typeof name !== 'string' || !name.trim()) {
     return { error: 'name is required' }
@@ -43,6 +44,14 @@ function parseTestInput(body: unknown): { data: TestInput } | { error: string } 
     }
   }
 
+  let parsedCost: number | undefined
+  if (cost !== undefined && cost !== null && cost !== '') {
+    if (typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0) {
+      return { error: 'cost must be a non-negative number' }
+    }
+    parsedCost = cost
+  }
+
   return {
     data: {
       name: name.trim(),
@@ -51,6 +60,7 @@ function parseTestInput(body: unknown): { data: TestInput } | { error: string } 
         unit: p.unit.trim(),
         biologicalReference: p.biologicalReference.trim(),
       })),
+      ...(parsedCost !== undefined ? { cost: parsedCost } : {}),
     },
   }
 }
@@ -76,6 +86,7 @@ router.post('/', verifyAuth, requireAdmin, async (req: AuthRequest, res) => {
         unit: p.unit || '',
         biologicalReference: p.biologicalReference || '',
       })),
+      ...(parsed.data.cost !== undefined ? { cost: parsed.data.cost } : {}),
       createdAt: now,
       updatedAt: now,
     }
@@ -110,6 +121,7 @@ router.patch('/:testId', verifyAuth, requireAdmin, async (req: AuthRequest, res)
         unit: p.unit || '',
         biologicalReference: p.biologicalReference || '',
       })),
+      cost: parsed.data.cost !== undefined ? parsed.data.cost : admin.firestore.FieldValue.delete(),
       updatedAt: now,
     }
 

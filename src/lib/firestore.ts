@@ -136,14 +136,23 @@ export async function softDeleteAppointment(id: string): Promise<void> {
 export async function createReport(data: {
   appointmentId: string
   patientId: string
-  pdfUrl: string
+  pdfUrl?: string
   testValues: TestValue[]
   summary?: string
+  packageId?: string
+  testIds?: string[]
 }): Promise<string> {
-  const ref = await addDoc(collection(db, 'reports'), {
-    ...data,
+  const payload: Record<string, unknown> = {
+    appointmentId: data.appointmentId,
+    patientId: data.patientId,
+    testValues: data.testValues,
     uploadedAt: serverTimestamp(),
-  })
+  }
+  if (data.pdfUrl) payload.pdfUrl = data.pdfUrl
+  if (data.summary) payload.summary = data.summary
+  if (data.packageId) payload.packageId = data.packageId
+  if (data.testIds && data.testIds.length) payload.testIds = data.testIds
+  const ref = await addDoc(collection(db, 'reports'), payload)
   return ref.id
 }
 

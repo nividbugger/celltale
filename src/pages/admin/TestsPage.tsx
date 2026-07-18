@@ -10,14 +10,15 @@ import { Input } from '../../components/ui/Input'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllTests } from '../../lib/firestore'
+import { getAllTests, getAllPackages } from '../../lib/firestore'
 import { createTest, updateTest, deleteTest } from '../../lib/api'
-import type { Test, TestParameter } from '../../types'
+import type { Test, TestParameter, Package } from '../../types'
 import { format } from 'date-fns'
 
 interface TestFormData {
   name: string
   parameters: TestParameter[]
+  cost: string
 }
 
 function TestForm({
@@ -42,8 +43,9 @@ function TestForm({
       ? {
           name: test.name,
           parameters: test.parameters,
+          cost: test.cost != null ? String(test.cost) : '',
         }
-      : { name: '', parameters: [] },
+      : { name: '', parameters: [], cost: '' },
   })
 
   const { fields, append, remove } = useFieldArray({
@@ -59,10 +61,20 @@ function TestForm({
         return
       }
 
+      let cost: number | undefined
+      if (data.cost.trim() !== '') {
+        cost = Number(data.cost)
+        if (!Number.isFinite(cost) || cost < 0) {
+          setServerError('Cost must be a non-negative number')
+          return
+        }
+      }
+
       if (isNew) {
         const result = await createTest({
           name: data.name.trim(),
           parameters: data.parameters,
+          cost,
         })
         const now = new Date()
         onSave({
@@ -70,6 +82,7 @@ function TestForm({
           testId: result.testId,
           name: result.name,
           parameters: result.parameters,
+          cost: result.cost,
           createdAt: { toDate: () => now } as any,
           updatedAt: { toDate: () => now } as any,
         })
@@ -77,6 +90,7 @@ function TestForm({
         const result = await updateTest(test.id, {
           name: data.name.trim(),
           parameters: data.parameters,
+          cost,
         })
         const now = new Date()
         onSave({
@@ -84,6 +98,7 @@ function TestForm({
           testId: result.testId,
           name: result.name,
           parameters: result.parameters,
+          cost: result.cost,
           createdAt: test.createdAt,
           updatedAt: { toDate: () => now } as any,
         })
@@ -106,6 +121,14 @@ function TestForm({
         placeholder="e.g. Blood Test"
         error={errors.name?.message}
         {...register('name', { required: 'Test name is required' })}
+      />
+
+      <Input
+        label="Cost (₹) — optional"
+        placeholder="e.g. 500"
+        type="number"
+        step="0.01"
+        {...register('cost')}
       />
 
       <div>
@@ -181,14 +204,18 @@ function TestForm({
 export default function TestsPage() {
   const { logOut } = useAuth()
   const [tests, setTests] = useState<Test[]>([])
+  const [packages, setPackages] = useState<Package[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [editTest, setEditTest] = useState<Test | 'new' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Test | null>(null)
 
   useEffect(() => {
-    getAllTests()
-      .then(setTests)
+    Promise.all([getAllTests(), getAllPackages()])
+      .then(([t, p]) => {
+        setTests(t)
+        setPackages(p)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -299,6 +326,7 @@ export default function TestsPage() {
                   <th className="text-left px-6 py-3 font-semibold">Test ID</th>
                   <th className="text-left px-6 py-3 font-semibold">Name</th>
                   <th className="text-left px-6 py-3 font-semibold">Parameters</th>
+                  <th className="text-left px-6 py-3 font-semibold">Cost</th>
                   <th className="text-left px-6 py-3 font-semibold hidden lg:table-cell">Created</th>
                   <th className="px-6 py-3" />
                 </tr>
@@ -316,6 +344,9 @@ export default function TestsPage() {
                           </span>
                         ))}
                       </span>
+                    </td>
+                    <td className="px-6 py-3 text-slate-600">
+                      {test.cost != null ? `₹${test.cost.toLocaleString('en-IN')}` : '—'}
                     </td>
                     <td className="px-6 py-3 text-slate-500 hidden lg:table-cell">
                       {test.createdAt?.toDate
@@ -373,6 +404,15 @@ export default function TestsPage() {
             <p className="text-slate-600">
               Are you sure you want to delete the test <span className="font-semibold">{deleteConfirm.name}</span>?
             </p>
+            {(() => {
+              const usedIn = packages.filter((p) => (p.testIds ?? []).includes(deleteConfirm.id))
+              return usedIn.length > 0 ? (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
+                  Used in: {usedIn.map((p) => p.name).join(', ')} — deleting will not remove it
+                  from those packages automatically.
+                </div>
+              ) : null
+            })()}
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setDeleteConfirm(null)}>
                 Cancel
