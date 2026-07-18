@@ -26,9 +26,13 @@ export const config = {
   /**
    * Allowed CORS origins. Keep in sync with cors.json for Firebase Storage CORS.
    * Requests from origins not in this list are rejected with HTTP 403.
+   * Hardcoded (not env-driven) — these are public domain names, not secrets, and
+   * must be identical no matter which developer's machine runs the deploy. A
+   * local api/.env overriding APP_URL previously knocked the bare production
+   * domain off this list for anyone who deployed with a differing value set.
    */
   allowedOrigins: [
-    process.env.APP_URL ?? 'https://celltalediagnostics.com',
+    'https://celltalediagnostics.com',
     'https://www.celltalediagnostics.com',
     'https://celltalediagnostics-8f817.web.app',
     'http://localhost:5173',
