@@ -1,6 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { UploadCloud, ChevronDown, ChevronUp, RefreshCw, CheckCircle, FlaskConical, ClipboardCheck, Trash2, Barcode } from 'lucide-react'
+import {
+  UploadCloud,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  CheckCircle,
+  FlaskConical,
+  ClipboardCheck,
+  Trash2,
+  Barcode,
+  Eye,
+  Printer,
+  AlertTriangle,
+} from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -10,9 +23,16 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAllAppointments } from '../../hooks/useAppointments'
-import { updateAppointmentStatus, softDeleteAppointment } from '../../lib/firestore'
+import {
+  updateAppointmentStatus,
+  softDeleteAppointment,
+  getReportByAppointmentId,
+  getClinicSettings,
+} from '../../lib/firestore'
+import { buildReportHtml } from '../../lib/reportHtml'
 import { BarcodePrintModal } from '../../components/admin/BarcodePrintModal'
-import type { Appointment, AppointmentStatus } from '../../types'
+import { DEFAULT_CLINIC_SETTINGS } from '../../types'
+import type { Appointment, AppointmentStatus, ClinicSettings, Report } from '../../types'
 import { format } from 'date-fns'
 
 const ACTIVE_STATUSES: AppointmentStatus[] = [
@@ -44,7 +64,15 @@ const NEXT_STATUS_ICON: Partial<Record<AppointmentStatus, typeof CheckCircle>> =
   'Report Ready': ClipboardCheck,
 }
 
-function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () => void }) {
+function AppointmentRow({
+  appt,
+  clinic,
+  onUpdate,
+}: {
+  appt: Appointment
+  clinic: ClinicSettings
+  onUpdate: () => void
+}) {
   const [expanded, setExpanded] = useState(false)
   const [newStatus, setNewStatus] = useState<AppointmentStatus>(appt.status)
   const [notes, setNotes] = useState(appt.notes ?? '')
@@ -54,6 +82,9 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false)
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [report, setReport] = useState<Report | null>(null)
+  const [reportLoading, setReportLoading] = useState(false)
 
   const nextStatus = NEXT_STATUS[appt.status]
   const nextLabel = NEXT_STATUS_LABEL[appt.status]
@@ -83,6 +114,39 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
     setDeleteConfirmOpen(false)
   }
 
+  async function handleViewReport() {
+    setReportModalOpen(true)
+    if (!report) {
+      setReportLoading(true)
+      const found = await getReportByAppointmentId(appt.id)
+      setReport(found)
+      setReportLoading(false)
+    }
+  }
+
+  function handlePrintReport() {
+    if (!report) return
+    if (report.pdfUrl) {
+      window.open(report.pdfUrl, '_blank')
+      return
+    }
+    const html = buildReportHtml(
+      {
+        patientName: appt.patientName,
+        packageName: appt.packageName,
+        date: format(new Date(appt.date), 'dd MMM yyyy'),
+        testValues: report.testValues,
+        summary: report.summary,
+      },
+      clinic,
+      { autoPrint: true },
+    )
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+    printWindow.document.write(html)
+    printWindow.document.close()
+  }
+
   return (
     <>
       <Card>
@@ -110,11 +174,25 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
 
               {/* Upload report button */}
               {(appt.status === 'Confirmed' || appt.status === 'Sample Collected') && (
-                <Link to={`/admin/upload-report/${appt.id}`}>
-                  <Button size="sm" variant="outline">
-                    <UploadCloud className="h-3.5 w-3.5 mr-1" /> Upload Report
-                  </Button>
-                </Link>
+                <>
+                  <Link to={`/admin/upload-report/${appt.id}`}>
+                    <Button size="sm" variant="outline">
+                      <UploadCloud className="h-3.5 w-3.5 mr-1" /> Upload Report
+                    </Button>
+                  </Link>
+                  <Link to={`/admin/generate-report/${appt.id}`}>
+                    <Button size="sm" variant="outline">
+                      <ClipboardCheck className="h-3.5 w-3.5 mr-1" /> Generate Report
+                    </Button>
+                  </Link>
+                </>
+              )}
+
+              {/* View report button */}
+              {(appt.status === 'Report Ready' || appt.status === 'Completed') && (
+                <Button size="sm" onClick={handleViewReport}>
+                  <Eye className="h-3.5 w-3.5 mr-1" /> View Report
+                </Button>
               )}
 
               {appt.status !== 'Deleted' && (
@@ -239,6 +317,86 @@ function AppointmentRow({ appt, onUpdate }: { appt: Appointment; onUpdate: () =>
         onClose={() => setBarcodeModalOpen(false)}
         appointment={appt}
       />
+
+      <Modal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        title="Report"
+        size="xl"
+      >
+        {reportLoading ? (
+          <LoadingSpinner className="py-12" />
+        ) : !report ? (
+          <p className="text-slate-500 text-sm">No report found for this appointment.</p>
+        ) : (
+          <div className="space-y-4">
+            {report.pdfUrl ? (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-6 text-center">
+                <p className="text-sm text-slate-600 mb-3">This report was uploaded as a PDF.</p>
+                <Button onClick={handlePrintReport}>
+                  <Printer className="h-4 w-4 mr-1" /> Open / Print PDF
+                </Button>
+              </div>
+            ) : (
+              <>
+                {report.summary && (
+                  <div className="bg-teal-50 border border-teal-100 rounded-2xl px-4 py-3 text-sm text-teal-800">
+                    <strong>Summary:</strong> {report.summary}
+                  </div>
+                )}
+                {report.testValues.some((t) => t.isAbnormal) && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-red-700">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    {report.testValues.filter((t) => t.isAbnormal).length} value(s) are outside the
+                    normal range.
+                  </div>
+                )}
+                <div className="space-y-5">
+                  {Object.entries(
+                    report.testValues.reduce<Record<string, typeof report.testValues>>((acc, v) => {
+                      if (!acc[v.category]) acc[v.category] = []
+                      acc[v.category].push(v)
+                      return acc
+                    }, {}),
+                  ).map(([category, values]) => (
+                    <div key={category}>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">
+                        {category}
+                      </h3>
+                      <div className="space-y-1">
+                        <div className="grid grid-cols-4 gap-2 px-3 py-1 text-xs text-slate-400 font-semibold uppercase">
+                          <span>Test</span>
+                          <span>Result</span>
+                          <span className="col-span-2">Normal Range</span>
+                        </div>
+                        {values.map((tv, i) => (
+                          <div
+                            key={i}
+                            className={`grid grid-cols-4 gap-2 py-2.5 px-3 rounded-xl text-sm ${
+                              tv.isAbnormal ? 'bg-red-50 text-red-800' : 'text-slate-700'
+                            }`}
+                          >
+                            <span className="font-medium truncate">{tv.name}</span>
+                            <span className="font-semibold">
+                              {tv.value} {tv.unit}
+                            </span>
+                            <span className="text-slate-500 col-span-2">{tv.normalRange}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end pt-2 border-t border-slate-100">
+                  <Button onClick={handlePrintReport}>
+                    <Printer className="h-4 w-4 mr-1" /> Print Report
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
     </>
   )
 }
@@ -250,6 +408,11 @@ export default function AdminAppointmentsPage() {
   const { appointments, loading, refetch } = useAllAppointments()
   const [mainTab, setMainTab] = useState<MainTab>('active')
   const [subFilter, setSubFilter] = useState<AppointmentStatus | 'All'>('All')
+  const [clinic, setClinic] = useState<ClinicSettings>(DEFAULT_CLINIC_SETTINGS)
+
+  useEffect(() => {
+    getClinicSettings().then(setClinic)
+  }, [])
 
   const activeAppointments = appointments.filter((a) => a.status !== 'Completed' && a.status !== 'Deleted')
   const completedAppointments = appointments.filter((a) => a.status === 'Completed')
@@ -399,7 +562,7 @@ export default function AdminAppointmentsPage() {
         ) : (
           <div className="space-y-3">
             {displayed.map((appt) => (
-              <AppointmentRow key={appt.id} appt={appt} onUpdate={refetch} />
+              <AppointmentRow key={appt.id} appt={appt} clinic={clinic} onUpdate={refetch} />
             ))}
           </div>
         )}

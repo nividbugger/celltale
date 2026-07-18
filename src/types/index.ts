@@ -33,6 +33,7 @@ export interface Test {
   testId: string
   name: string
   parameters: TestParameter[]
+  cost?: number
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -82,9 +83,11 @@ export interface Report {
   appointmentId: string
   patientId: string
   uploadedAt: Timestamp
-  pdfUrl: string
+  pdfUrl?: string
   testValues: TestValue[]
   summary?: string
+  packageId?: string
+  testIds?: string[]
 }
 
 // ─── Packages ─────────────────────────────────────────────────────────────
@@ -106,6 +109,7 @@ export interface Package {
   consultations: string[]
   summary: string[]
   details: PackageDetail[]
+  testIds: string[]
   order: number
 }
 
@@ -115,6 +119,7 @@ export const PACKAGES: Package[] = [
     name: 'Basic Screening Package',
     price: 1599,
     testCount: 30,
+    testIds: [],
     isPopular: false,
     order: 0,
     color: 'bg-white border-slate-200',
@@ -143,6 +148,7 @@ export const PACKAGES: Package[] = [
     name: 'Economy Disease Checkup',
     price: 2599,
     testCount: 42,
+    testIds: [],
     isPopular: true,
     order: 1,
     color: 'bg-blue-50 border-blue-200 shadow-blue-100',
@@ -172,6 +178,7 @@ export const PACKAGES: Package[] = [
     name: 'Advanced Prevention',
     price: 3599,
     testCount: 56,
+    testIds: [],
     isPopular: false,
     order: 2,
     color: 'bg-white border-slate-200',

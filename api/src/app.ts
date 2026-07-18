@@ -6,6 +6,7 @@ import { config } from './config'
 import emailRouter from './routes/email'
 import paymentsRouter from './routes/payments'
 import adminPatientsRouter from './routes/adminPatients'
+import adminTestsRouter from './routes/adminTests'
 
 export const app = express()
 
@@ -31,7 +32,7 @@ app.use(
         callback(new Error(`CORS: origin '${origin}' not allowed`))
       }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type'],
     credentials: true,
     maxAge: 3600,
@@ -63,6 +64,7 @@ app.use(globalLimiter)
 app.use('/api/email', emailRouter)
 app.use('/api/payments', paymentsRouter)
 app.use('/api/admin/patients', adminPatientsRouter)
+app.use('/api/admin/tests', adminTestsRouter)
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

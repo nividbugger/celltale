@@ -159,7 +159,59 @@ export async function updatePatient(
   })
 }
 
-// ─── Payments API (stubs — will be populated when gateway is integrated) ──────
+// ─── Admin: Tests API ─────────────────────────────────────────────────────────
+
+export interface TestParameter {
+  parameter: string
+  unit: string
+  biologicalReference: string
+}
+
+export interface CreateTestRequest {
+  name: string
+  parameters: TestParameter[]
+  cost?: number
+}
+
+export interface UpdateTestRequest {
+  name?: string
+  parameters?: TestParameter[]
+  cost?: number
+}
+
+export interface AdminTestRecord {
+  id: string
+  testId: string
+  name: string
+  parameters: TestParameter[]
+  cost?: number
+}
+
+/** Admin: create a new test configuration. */
+export async function createTest(payload: CreateTestRequest): Promise<AdminTestRecord> {
+  return apiFetch('/admin/tests', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** Admin: update an existing test. */
+export async function updateTest(
+  testId: string,
+  payload: UpdateTestRequest,
+): Promise<AdminTestRecord> {
+  return apiFetch(`/admin/tests/${encodeURIComponent(testId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** Admin: delete a test. */
+export async function deleteTest(testId: string): Promise<{ success: boolean }> {
+  return apiFetch(`/admin/tests/${encodeURIComponent(testId)}`, {
+    method: 'DELETE',
+  })
+}
 
 export interface CreateOrderRequest {
   appointmentId: string

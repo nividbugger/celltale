@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import {
-  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save, RotateCcw
+  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save, RotateCcw, Search, X
 } from 'lucide-react'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
@@ -11,9 +11,9 @@ import { Card, CardContent } from '../../components/ui/Card'
 import { Modal } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllPackages, savePackage, deletePackage, reorderPackages } from '../../lib/firestore'
+import { getAllPackages, savePackage, deletePackage, reorderPackages, getAllTests } from '../../lib/firestore'
 import { PACKAGES as STATIC_PACKAGES } from '../../types'
-import type { Package, PackageDetail } from '../../types'
+import type { Package, PackageDetail, Test } from '../../types'
 
 // ─── Style presets ──────────────────────────────────────────────────────────
 
@@ -56,12 +56,11 @@ interface PackageFormData {
   id: string
   name: string
   price: number
-  testCount: number
   isPopular: boolean
   colorPreset: number
   consultations: string
   summary: { value: string }[]
-  details: PackageDetail[]
+  testIds: string[]
 }
 
 function toFormData(pkg: Package, presetIdx: number): PackageFormData {
@@ -69,22 +68,37 @@ function toFormData(pkg: Package, presetIdx: number): PackageFormData {
     id: pkg.id,
     name: pkg.name,
     price: pkg.price,
-    testCount: pkg.testCount,
     isPopular: pkg.isPopular,
     colorPreset: presetIdx,
     consultations: pkg.consultations.join(', '),
     summary: pkg.summary.map((v) => ({ value: v })),
-    details: pkg.details,
+    testIds: pkg.testIds ?? [],
   }
 }
 
-function fromFormData(data: PackageFormData, order: number): Package {
+function computeTestCount(testIds: string[], allTests: Test[]): number {
+  return testIds.reduce(
+    (sum, id) => sum + (allTests.find((t) => t.id === id)?.parameters.length ?? 0),
+    0,
+  )
+}
+
+function computeSuggestedPrice(testIds: string[], allTests: Test[]): number {
+  return testIds.reduce((sum, id) => sum + (allTests.find((t) => t.id === id)?.cost ?? 0), 0)
+}
+
+function fromFormData(
+  data: PackageFormData,
+  order: number,
+  allTests: Test[],
+  existingDetails: PackageDetail[],
+): Package {
   const preset = COLOR_PRESETS[data.colorPreset] ?? COLOR_PRESETS[0]
   return {
     id: data.id.trim().toLowerCase().replace(/\s+/g, '-'),
     name: data.name,
     price: Number(data.price),
-    testCount: Number(data.testCount),
+    testCount: computeTestCount(data.testIds, allTests),
     isPopular: data.isPopular,
     order,
     color: preset.color,
@@ -95,7 +109,8 @@ function fromFormData(data: PackageFormData, order: number): Package {
       .map((c) => c.trim())
       .filter(Boolean),
     summary: data.summary.map((s) => s.value).filter(Boolean),
-    details: data.details.filter((d) => d.category && d.text),
+    details: existingDetails,
+    testIds: data.testIds,
   }
 }
 
@@ -108,22 +123,28 @@ function detectPreset(pkg: Package): number {
 function PackageForm({
   pkg,
   existingIds,
+  allTests,
   onSave,
   onCancel,
 }: {
   pkg: Package | null
   existingIds: string[]
+  allTests: Test[]
   onSave: (p: Package) => void
   onCancel: () => void
 }) {
   const isNew = pkg === null
   const presetIdx = pkg ? Math.max(0, detectPreset(pkg)) : 0
+  const priceTouched = useRef(!isNew)
+  const [testSearch, setTestSearch] = useState('')
+  const [testDropdownOpen, setTestDropdownOpen] = useState(false)
 
   const {
     register,
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PackageFormData>({
     defaultValues: pkg
@@ -132,12 +153,11 @@ function PackageForm({
           id: '',
           name: '',
           price: 0,
-          testCount: 0,
           isPopular: false,
           colorPreset: 0,
           consultations: 'Doctor, Dental, Eye',
           summary: [{ value: '' }],
-          details: [{ category: '', text: '' }],
+          testIds: [],
         },
   })
 
@@ -147,20 +167,31 @@ function PackageForm({
     remove: removeSummary,
   } = useFieldArray({ control, name: 'summary' })
 
-  const {
-    fields: detailFields,
-    append: appendDetail,
-    remove: removeDetail,
-  } = useFieldArray({ control, name: 'details' })
+  const watchedTestIds = watch('testIds') ?? []
+  const suggestedPrice = computeSuggestedPrice(watchedTestIds, allTests)
+
+  useEffect(() => {
+    if (!priceTouched.current) {
+      setValue('price', suggestedPrice)
+    }
+    // Only re-run when the selected tests change — price itself is excluded on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedTestIds.join(',')])
+
+  function applySuggestedPrice() {
+    setValue('price', suggestedPrice)
+    priceTouched.current = false
+  }
 
   async function onSubmit(data: PackageFormData) {
     const order = pkg?.order ?? existingIds.length
-    const result = fromFormData(data, order)
+    const result = fromFormData(data, order, allTests, pkg?.details ?? [])
     await savePackage(result)
     onSave(result)
   }
 
   const selectedPreset = COLOR_PRESETS[watch('colorPreset')] ?? COLOR_PRESETS[0]
+  const liveTestCount = computeTestCount(watchedTestIds, allTests)
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -199,19 +230,30 @@ function PackageForm({
           </label>
           <input
             type="number"
-            {...register('price', { required: 'Required', min: 1 })}
+            {...register('price', {
+              required: 'Required',
+              min: 1,
+              onChange: () => { priceTouched.current = true },
+            })}
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
+          {watchedTestIds.length > 0 && suggestedPrice !== Number(watch('price')) && (
+            <button
+              type="button"
+              onClick={applySuggestedPrice}
+              className="text-xs text-teal-600 hover:text-teal-800 font-medium mt-1"
+            >
+              Suggested from tests: ₹{suggestedPrice} · Use this
+            </button>
+          )}
         </div>
         <div>
           <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
             Total Tests
           </label>
-          <input
-            type="number"
-            {...register('testCount', { min: 0 })}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
+          <div className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            {liveTestCount} (recalculated from selected tests)
+          </div>
         </div>
       </div>
 
@@ -281,6 +323,98 @@ function PackageForm({
         />
       </div>
 
+      {/* Tests Included */}
+      <div>
+        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-2">
+          Tests Included
+        </label>
+        <Controller
+          control={control}
+          name="testIds"
+          render={({ field }) => {
+            const selectedTests = field.value
+              .map((id: string) => allTests.find((t) => t.id === id))
+              .filter((t): t is Test => Boolean(t))
+            const candidates = allTests.filter(
+              (t) => !field.value.includes(t.id) && t.name.toLowerCase().includes(testSearch.toLowerCase()),
+            )
+
+            function addTest(id: string) {
+              field.onChange([...field.value, id])
+              setTestSearch('')
+            }
+
+            function removeTest(id: string) {
+              field.onChange(field.value.filter((v: string) => v !== id))
+            }
+
+            return (
+              <div>
+                {selectedTests.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedTests.map((t) => (
+                      <span
+                        key={t.id}
+                        className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-full pl-3 pr-1.5 py-1 text-xs font-medium"
+                      >
+                        {t.name}
+                        <span className="text-teal-400">
+                          · {t.parameters.length} param{t.parameters.length === 1 ? '' : 's'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeTest(t.id)}
+                          className="p-0.5 rounded-full hover:bg-teal-100 text-teal-500 hover:text-teal-700"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={testSearch}
+                    onChange={(e) => setTestSearch(e.target.value)}
+                    onFocus={() => setTestDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setTestDropdownOpen(false), 100)}
+                    placeholder={allTests.length === 0 ? 'No tests created yet' : 'Search tests by name...'}
+                    disabled={allTests.length === 0}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50 disabled:text-slate-400"
+                  />
+                  {testDropdownOpen && candidates.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg divide-y divide-slate-50">
+                      {candidates.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onMouseDown={() => addTest(t.id)}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50"
+                        >
+                          <span className="text-sm text-slate-700">{t.name}</span>
+                          <span className="text-xs text-slate-400 shrink-0">
+                            {t.parameters.length} param{t.parameters.length === 1 ? '' : 's'}
+                            {t.cost != null ? ` · ₹${t.cost}` : ''}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {testDropdownOpen && testSearch && candidates.length === 0 && (
+                    <div className="absolute z-10 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg px-3 py-2 text-sm text-slate-400">
+                      No matching tests
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          }}
+        />
+      </div>
+
       {/* Summary */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -315,47 +449,6 @@ function PackageForm({
         </div>
       </div>
 
-      {/* Details */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-            Test Details
-          </label>
-          <button
-            type="button"
-            onClick={() => appendDetail({ category: '', text: '' })}
-            className="text-xs text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-1"
-          >
-            <Plus className="h-3 w-3" /> Add Row
-          </button>
-        </div>
-        <div className="space-y-3">
-          {detailFields.map((field, i) => (
-            <div key={field.id} className="flex gap-2 items-start">
-              <div className="flex-1 grid grid-cols-3 gap-2">
-                <input
-                  {...register(`details.${i}.category`)}
-                  placeholder="E.g. BLOOD-CBC (17)"
-                  className="col-span-1 rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-                <input
-                  {...register(`details.${i}.text`)}
-                  placeholder="Comma-separated test names..."
-                  className="col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => removeDetail(i)}
-                className="text-slate-400 hover:text-red-500 p-1 rounded-lg transition-colors mt-1"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Actions */}
       <div className="flex gap-3 pt-2 border-t border-slate-100">
         <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
@@ -376,6 +469,7 @@ export default function AdminPackagesPage() {
   const { logOut } = useAuth()
   const navigate = useNavigate()
   const [packages, setPackages] = useState<Package[]>([])
+  const [allTests, setAllTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [seeding, setSeeding] = useState(false)
@@ -388,8 +482,9 @@ export default function AdminPackagesPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const pkgs = await getAllPackages()
+      const [pkgs, tests] = await Promise.all([getAllPackages(), getAllTests()])
       setPackages(pkgs)
+      setAllTests(tests)
     } catch (err: any) {
       console.error('Failed to load packages:', err)
       setLoadError(err?.message ?? 'Failed to load packages. Check Firestore rules and console.')
@@ -618,6 +713,7 @@ export default function AdminPackagesPage() {
           <PackageForm
             pkg={editPkg === 'new' ? null : (editPkg as Package)}
             existingIds={existingIds}
+            allTests={allTests}
             onSave={handleSaved}
             onCancel={() => setEditPkg(null)}
           />

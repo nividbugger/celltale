@@ -14,11 +14,12 @@ import {
   getInvoiceById,
   getNextInvoiceNumber,
   getClinicSettings,
+  getAllTests,
 } from '../../lib/firestore'
 import { buildInvoiceHtml, invoiceTotals, lineItemAmount } from '../../lib/invoiceHtml'
 import type { InvoiceDraft } from '../../lib/invoiceHtml'
 import { DEFAULT_CLINIC_SETTINGS } from '../../types'
-import type { ClinicSettings, Invoice, InvoiceLineItem } from '../../types'
+import type { ClinicSettings, Invoice, InvoiceLineItem, Test } from '../../types'
 
 interface InvoiceFormData {
   date: string
@@ -70,6 +71,7 @@ export default function AdminInvoiceEditorPage() {
   const [clinic, setClinic] = useState<ClinicSettings>(DEFAULT_CLINIC_SETTINGS)
   const [invoiceNumber, setInvoiceNumber] = useState<number | null>(null)
   const [invoiceDbId, setInvoiceDbId] = useState<string | null>(isNew ? null : invoiceId ?? null)
+  const [tests, setTests] = useState<Test[]>([])
 
   const { register, control, handleSubmit, reset } = useForm<InvoiceFormData>({
     defaultValues: defaultFormValues(),
@@ -80,8 +82,9 @@ export default function AdminInvoiceEditorPage() {
 
   useEffect(() => {
     async function load() {
-      const clinicSettings = await getClinicSettings()
+      const [clinicSettings, allTests] = await Promise.all([getClinicSettings(), getAllTests()])
       setClinic(clinicSettings)
+      setTests(allTests)
 
       if (isNew) {
         const nextNumber = await getNextInvoiceNumber()
@@ -237,13 +240,43 @@ export default function AdminInvoiceEditorPage() {
               <CardContent className="py-5">
                 <div className="flex items-center justify-between mb-3">
                   <label className={labelClass}>Line Items</label>
-                  <button
-                    type="button"
-                    onClick={() => append(BLANK_LINE_ITEM)}
-                    className="text-xs text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-1"
-                  >
-                    <Plus className="h-3 w-3" /> Add Item
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {tests.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const test = tests.find((t) => t.id === e.target.value)
+                          if (test) {
+                            append({
+                              itemName: test.name,
+                              hsnSac: '',
+                              quantity: 1,
+                              pricePerUnit: test.cost ?? 0,
+                              discountPercent: 0,
+                            })
+                          }
+                          e.target.value = ''
+                        }}
+                        className="text-xs rounded-lg border border-slate-200 px-2 py-1 text-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      >
+                        <option value="" disabled>
+                          + Add from Test
+                        </option>
+                        {tests.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} — ₹{t.cost ?? 0}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => append(BLANK_LINE_ITEM)}
+                      className="text-xs text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" /> Add Item
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">

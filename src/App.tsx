@@ -20,6 +20,7 @@ import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminAppointmentsPage from './pages/admin/AdminAppointmentsPage'
 import AdminUploadReportPage from './pages/admin/AdminUploadReportPage'
+import AdminGenerateReportPage from './pages/admin/AdminGenerateReportPage'
 import AdminPatientsPage from './pages/admin/AdminPatientsPage'
 import AdminPackagesPage from './pages/admin/AdminPackagesPage'
 import AdminInvoicesPage from './pages/admin/AdminInvoicesPage'
@@ -101,6 +102,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminUploadReportPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/generate-report/:appointmentId"
+            element={
+              <AdminRoute>
+                <AdminGenerateReportPage />
               </AdminRoute>
             }
           />
