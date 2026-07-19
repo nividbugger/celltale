@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import type { AppointmentDoc, ResolvedTest, SampleType } from '../types'
 import { assertTransition } from './appointmentStateMachine'
 
@@ -7,13 +8,44 @@ export interface SampleDraft {
   testIds: string[]
 }
 
+export interface ResolvedSampleGroup {
+  label: string
+  testIds: string[]
+  sampleType: SampleType
+}
+
 /**
- * Groups a frozen resolvedTests snapshot by sample type. Pure and deterministic — the same
- * appointment always derives the same samples, regardless of whether the tests came from one
- * package, several packages, manual selection, or a mix. This is what guarantees
- * "CBC + LFT + HbA1c -> one blood sample" instead of one barcode per test.
+ * Derives sample drafts from a frozen resolvedTests snapshot.
+ *
+ * When `resolvedSampleGroups` is provided (frozen at confirm time from the package's tube-split
+ * configuration), each group becomes exactly one physical sample/barcode. Any tests not covered
+ * by a group fall back to the auto-grouping behaviour (one sample per distinct sampleType).
+ *
+ * Without `resolvedSampleGroups`: one sample per distinct sampleType (original behaviour).
  */
-export function deriveSamples(resolvedTests: ResolvedTest[]): SampleDraft[] {
+export function deriveSamples(
+  resolvedTests: ResolvedTest[],
+  resolvedSampleGroups?: ResolvedSampleGroup[],
+): SampleDraft[] {
+  if (resolvedSampleGroups && resolvedSampleGroups.length > 0) {
+    const covered = new Set(resolvedSampleGroups.flatMap((g) => g.testIds))
+    const explicit = resolvedSampleGroups.map((g) => ({ sampleType: g.sampleType, testIds: g.testIds }))
+
+    // Any tests not in a named group (e.g. manually added tests): group by sampleType as before.
+    const byType = new Map<SampleType, string[]>()
+    for (const rt of resolvedTests) {
+      if (covered.has(rt.testId)) continue
+      const list = byType.get(rt.sampleType)
+      if (list) list.push(rt.testId)
+      else byType.set(rt.sampleType, [rt.testId])
+    }
+
+    return [
+      ...explicit,
+      ...Array.from(byType.entries()).map(([sampleType, testIds]) => ({ sampleType, testIds })),
+    ]
+  }
+
   const byType = new Map<SampleType, string[]>()
   for (const rt of resolvedTests) {
     const list = byType.get(rt.sampleType)
@@ -106,7 +138,7 @@ export async function generateSamplesForAppointment(
       assertTransition(appt.status, 'SamplesGenerating')
     }
 
-    const drafts = deriveSamples(appt.resolvedTests)
+    const drafts = deriveSamples(appt.resolvedTests, appt.resolvedSampleGroups)
     if (drafts.length === 0) {
       throw new Error('Cannot generate samples for an appointment with no resolved tests')
     }
@@ -125,7 +157,7 @@ export async function generateSamplesForAppointment(
     tx.update(apptRef, {
       status: 'SamplesGenerating',
       pendingSamples,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })
 
     return { done: false as const, pendingSamples, patientId: appt.patientId }
@@ -135,7 +167,7 @@ export async function generateSamplesForAppointment(
     return { sampleIds: claim.sampleIds }
   }
 
-  const now = admin.firestore.FieldValue.serverTimestamp()
+  const now = FieldValue.serverTimestamp()
   const batch = db.batch()
   for (const sample of claim.pendingSamples) {
     // The sample's own globally-unique ID doubles as its barcode value — CODE128 encodes it
@@ -157,7 +189,7 @@ export async function generateSamplesForAppointment(
   batch.update(apptRef, {
     status: 'SamplesGenerated',
     sampleIds,
-    pendingSamples: admin.firestore.FieldValue.delete(),
+    pendingSamples: FieldValue.delete(),
     updatedAt: now,
   })
   await batch.commit()

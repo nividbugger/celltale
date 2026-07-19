@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { verifyAuth, AuthRequest } from '../middleware/verifyAuth'
 import { requireSelfOrAdmin, isAdminUser } from '../middleware/authz'
 import { asyncHandler } from '../middleware/asyncHandler'
@@ -58,9 +59,9 @@ router.post('/:id/collect', verifyAuth, asyncHandler(async (req: AuthRequest, re
   await ref.update({
     collectionStatus: 'collected',
     collector: collector.trim(),
-    collectionDatetime: admin.firestore.FieldValue.serverTimestamp(),
+    collectionDatetime: FieldValue.serverTimestamp(),
     ...(remarks ? { remarks: remarks.trim() } : {}),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   })
 
   // Appointment status advances SamplesGenerated -> SamplesCollected automatically once every
@@ -84,7 +85,7 @@ router.post('/:id/collect', verifyAuth, asyncHandler(async (req: AuthRequest, re
     if (appt && appt.status === 'SamplesGenerated') {
       try {
         assertTransition(appt.status, 'SamplesCollected')
-        await apptRef.update({ status: 'SamplesCollected', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+        await apptRef.update({ status: 'SamplesCollected', updatedAt: FieldValue.serverTimestamp() })
       } catch {
         // Not a legal transition from the appointment's current state — leave it as-is rather
         // than throwing, since the sample itself was already successfully marked collected.
@@ -109,7 +110,25 @@ router.post('/:id/print', verifyAuth, asyncHandler(async (req: AuthRequest, res:
     db.collection('appointments').doc(sample.appointmentId).get(),
     Promise.all(sample.testIds.map((id) => db.collection('tests').doc(id).get())),
   ])
-  const appt = apptSnap.data() as { patientName?: string; date?: string; timeSlot?: string } | undefined
+  type ApptShape = {
+    patientName?: string
+    date?: string
+    timeSlot?: string
+    resolvedSampleGroups?: Array<{ label: string; testIds: string[] }>
+  }
+  const appt = apptSnap.data() as ApptShape | undefined
+  const existingTestDocs = testDocs.filter((d) => d.exists)
+
+  // Prefer the resolvedSampleGroup label (e.g. "Lavender", "Red") — it's set by the admin
+  // at confirm time and is the authoritative tube-color name for this sample group.
+  // Fall back to tubeColor on the test doc if no matching group exists.
+  const matchingGroup = appt?.resolvedSampleGroups?.find((g) =>
+    sample.testIds.some((id) => g.testIds.includes(id)),
+  )
+  const tubeColor =
+    matchingGroup?.label ??
+    existingTestDocs.map((d) => (d.data() as { tubeColor?: string }).tubeColor).find(Boolean) ??
+    ''
 
   res.json({
     sampleId: sample.id,
@@ -118,7 +137,8 @@ router.post('/:id/print', verifyAuth, asyncHandler(async (req: AuthRequest, res:
     patientName: appt?.patientName ?? '',
     date: appt?.date ?? '',
     timeSlot: appt?.timeSlot ?? '',
-    testNames: testDocs.filter((d) => d.exists).map((d) => (d.data() as { name: string }).name),
+    testNames: existingTestDocs.map((d) => (d.data() as { name: string }).name),
+    tubeColor,
   })
 }))
 
@@ -149,7 +169,7 @@ router.post('/:id/reject', verifyAuth, asyncHandler(async (req: AuthRequest, res
 
   const db = admin.firestore()
   const [replacementId] = await reserveSampleIds(1)
-  const now = admin.firestore.FieldValue.serverTimestamp()
+  const now = FieldValue.serverTimestamp()
 
   const batch = db.batch()
   batch.update(db.collection('samples').doc(sample.id), {
@@ -170,7 +190,7 @@ router.post('/:id/reject', verifyAuth, asyncHandler(async (req: AuthRequest, res
     updatedAt: now,
   })
   batch.update(db.collection('appointments').doc(sample.appointmentId), {
-    sampleIds: admin.firestore.FieldValue.arrayUnion(replacementId),
+    sampleIds: FieldValue.arrayUnion(replacementId),
     updatedAt: now,
   })
   await batch.commit()

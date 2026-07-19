@@ -1,0 +1,16 @@
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.csproj.AssemblyReference.cache
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.AssemblyInfoInputs.cache
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.AssemblyInfo.cs
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.csproj.CoreCompileInputs.cache
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.sourcelink.json
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\bin\Debug\net8.0\LisMiddleware.Queue.deps.json
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\bin\Debug\net8.0\LisMiddleware.Queue.dll
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\bin\Debug\net8.0\LisMiddleware.Queue.pdb
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\bin\Debug\net8.0\LisMiddleware.Core.dll
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\bin\Debug\net8.0\LisMiddleware.Core.pdb
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddl.BCB7404F.Up2Date
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.dll
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\refint\LisMiddleware.Queue.dll
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\LisMiddleware.Queue.pdb
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Queue\obj\Debug\net8.0\ref\LisMiddleware.Queue.dll

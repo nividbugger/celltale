@@ -1,12 +1,13 @@
 import { Router, Response } from 'express'
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { verifyAuth, AuthRequest } from '../middleware/verifyAuth'
 import { requireSelfOrAdmin, isAdminUser } from '../middleware/authz'
 import { asyncHandler } from '../middleware/asyncHandler'
 import { resolveTests } from '../services/testResolution'
 import { deriveSamples, generateSamplesForAppointment } from '../services/sampleGeneration'
 import { assertTransition, IllegalTransitionError } from '../services/appointmentStateMachine'
-import type { AppointmentDoc, AppointmentStatus, PackageDoc, TestDoc } from '../types'
+import type { AppointmentDoc, AppointmentPackageEntry, AppointmentStatus, PackageDoc, ResolvedTest, SampleType, TestDoc } from '../types'
 
 const router = Router()
 
@@ -41,6 +42,63 @@ async function getAllTestsById(ids: string[]): Promise<Map<string, TestDoc>> {
     if (snap.exists) map.set(snap.id, { id: snap.id, ...snap.data() } as TestDoc)
   })
   return map
+}
+
+/**
+ * Computes the frozen sample-group list for an appointment from the packages' sampleGroups config.
+ * Returns undefined when no package defines custom groups (fall back to auto-group by sampleType).
+ */
+function computeResolvedSampleGroups(
+  packageEntries: AppointmentPackageEntry[],
+  packagesById: Map<string, PackageDoc>,
+  resolvedTests: ResolvedTest[],
+): Array<{ label: string; testIds: string[]; sampleType: SampleType }> | undefined {
+  const groups: Array<{ label: string; testIds: string[]; sampleType: SampleType }> = []
+
+  for (const entry of packageEntries) {
+    const pkg = packagesById.get(entry.packageId)
+    if (!pkg?.sampleGroups || pkg.sampleGroups.length === 0) continue
+
+    for (const group of pkg.sampleGroups) {
+      const groupTestIds = resolvedTests
+        .filter((rt) => rt.sourcePackageId === entry.packageId && group.testIds.includes(rt.testId))
+        .map((rt) => rt.testId)
+      if (groupTestIds.length === 0) continue
+
+      const sampleType: SampleType =
+        resolvedTests.find((rt) => rt.testId === groupTestIds[0])?.sampleType ?? 'blood'
+      groups.push({ label: group.label, testIds: groupTestIds, sampleType })
+    }
+  }
+
+  return groups.length > 0 ? groups : undefined
+}
+
+/**
+ * Builds explicit sample groups from the admin's per-test tube colour assignment for manually
+ * added tests. Mirrors computeResolvedSampleGroups but operates on the manualTubeColorMap
+ * instead of package sampleGroups config.
+ */
+function buildManualTubeGroups(
+  manualTubeColorMap: Record<string, string> | undefined,
+  manualTestIds: string[],
+  resolvedTests: ResolvedTest[],
+): Array<{ label: string; testIds: string[]; sampleType: SampleType }> {
+  if (!manualTubeColorMap || Object.keys(manualTubeColorMap).length === 0) return []
+  const manualSet = new Set(manualTestIds)
+  const byColor = new Map<string, string[]>()
+  for (const [testId, colorName] of Object.entries(manualTubeColorMap)) {
+    if (!manualSet.has(testId) || !colorName) continue
+    const list = byColor.get(colorName) ?? []
+    list.push(testId)
+    byColor.set(colorName, list)
+  }
+  const groups: Array<{ label: string; testIds: string[]; sampleType: SampleType }> = []
+  for (const [colorName, testIds] of byColor.entries()) {
+    const sampleType = resolvedTests.find((rt) => testIds.includes(rt.testId))?.sampleType ?? 'blood'
+    groups.push({ label: colorName, testIds, sampleType })
+  }
+  return groups
 }
 
 function respondAppointment(res: Response, status: number, appt: object): void {
@@ -87,7 +145,7 @@ router.post('/', verifyAuth, asyncHandler(async (req: AuthRequest, res: Response
   }
   const patient = patientSnap.data() as { name: string; phone: string }
 
-  const now = admin.firestore.FieldValue.serverTimestamp()
+  const now = FieldValue.serverTimestamp()
   const apptData = {
     patientId,
     patientName: patient.name,
@@ -132,7 +190,7 @@ router.patch('/:id', verifyAuth, asyncHandler(async (req: AuthRequest, res: Resp
   }
 
   const { date, timeSlot, collectionAddress, notes } = (req.body ?? {}) as Record<string, unknown>
-  const updates: Record<string, unknown> = { updatedAt: admin.firestore.FieldValue.serverTimestamp() }
+  const updates: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() }
   if (date !== undefined) {
     if (typeof date !== 'string' || !DATE_REGEX.test(date)) {
       res.status(400).json({ error: 'date must be in yyyy-MM-dd format' })
@@ -210,8 +268,8 @@ router.post('/:id/packages', verifyAuth, asyncHandler(async (req: AuthRequest, r
     // Atomic array append — a plain read-then-overwrite here would lose concurrent additions
     // (two quick "add package" clicks racing) since the second write's base array snapshot
     // wouldn't include the first's change yet.
-    packages: admin.firestore.FieldValue.arrayUnion(...additions),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    packages: FieldValue.arrayUnion(...additions),
+    updatedAt: FieldValue.serverTimestamp(),
   })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
@@ -235,8 +293,8 @@ router.delete('/:id/packages/:packageId', verifyAuth, asyncHandler(async (req: A
 
   const ref = admin.firestore().collection('appointments').doc(appt.id)
   await ref.update({
-    packages: admin.firestore.FieldValue.arrayRemove(toRemove),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    packages: FieldValue.arrayRemove(toRemove),
+    updatedAt: FieldValue.serverTimestamp(),
   })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
@@ -275,8 +333,8 @@ router.post('/:id/tests', verifyAuth, asyncHandler(async (req: AuthRequest, res:
 
   const ref = admin.firestore().collection('appointments').doc(appt.id)
   await ref.update({
-    manualTestIds: admin.firestore.FieldValue.arrayUnion(...newIds),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    manualTestIds: FieldValue.arrayUnion(...newIds),
+    updatedAt: FieldValue.serverTimestamp(),
   })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
@@ -294,8 +352,8 @@ router.delete('/:id/tests/:testId', verifyAuth, asyncHandler(async (req: AuthReq
 
   const ref = admin.firestore().collection('appointments').doc(appt.id)
   await ref.update({
-    manualTestIds: admin.firestore.FieldValue.arrayRemove(req.params.testId),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    manualTestIds: FieldValue.arrayRemove(req.params.testId),
+    updatedAt: FieldValue.serverTimestamp(),
   })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
@@ -335,16 +393,33 @@ router.get('/:id/summary', verifyAuth, asyncHandler(async (req: AuthRequest, res
   const samplesSnap = await db.collection('samples').where('appointmentId', '==', appt.id).get()
   const computedCost = resolvedTests.reduce((sum, t) => sum + t.cost, 0)
 
+  const previewSampleGroups = (() => {
+    if (appt.status !== 'Created') return undefined
+    const pkgGroups = computeResolvedSampleGroups(appt.packages, packagesById, resolvedTests)
+    const manualGroups = buildManualTubeGroups(appt.manualTubeColorMap, appt.manualTestIds, resolvedTests)
+    const all = [...(pkgGroups ?? []), ...manualGroups]
+    return all.length > 0 ? all : undefined
+  })()
+
+  const testNameMap = new Map(resolvedTests.map((rt) => [rt.testId, rt.name]))
+  const sampleDrafts = appt.status === 'Created' ? deriveSamples(resolvedTests, previewSampleGroups) : []
+  const samplePreviews = sampleDrafts.map((draft, i) => ({
+    sampleType: draft.sampleType,
+    label: previewSampleGroups && i < previewSampleGroups.length ? previewSampleGroups[i].label : undefined,
+    testNames: draft.testIds.map((id) => testNameMap.get(id) ?? id),
+  }))
+
   res.json({
     packages: appt.packages,
     manualTestIds: appt.manualTestIds,
     resolvedTests,
     totalTests: resolvedTests.length,
-    totalSamples:
-      appt.status === 'Created' ? deriveSamples(resolvedTests).length : samplesSnap.size,
+    totalSamples: appt.status === 'Created' ? sampleDrafts.length : samplesSnap.size,
     computedCost,
     costOverride: appt.costOverride ?? null,
     estimatedCost: appt.costOverride ?? computedCost,
+    samplePreviews,
+    manualTubeColorMap: appt.manualTubeColorMap ?? {},
   })
 }))
 
@@ -374,10 +449,42 @@ router.post('/:id/cost-override', verifyAuth, asyncHandler(async (req: AuthReque
   const ref = admin.firestore().collection('appointments').doc(appt.id)
   await ref.update({
     costOverride: amount,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
+}))
+
+// ─── POST /api/appointments/:id/manual-tube-colors ───────────────────────────
+// Admin-only, pre-confirm: sets the per-test tube colour map for manually added tests.
+// { colorMap: Record<testId, colorName> } — empty string value means "no assignment (auto)".
+router.post('/:id/manual-tube-colors', verifyAuth, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user || !(await isAdminUser(req.user.uid))) {
+    res.status(403).json({ error: 'Forbidden: admin access required' })
+    return
+  }
+  const appt = await getAppointmentOr404(req.params.id, res)
+  if (!appt) return
+  if (appt.status !== 'Created') {
+    res.status(409).json({ error: 'Tube colour assignments can only be changed before the appointment is confirmed' })
+    return
+  }
+  const { colorMap } = (req.body ?? {}) as Record<string, unknown>
+  if (typeof colorMap !== 'object' || colorMap === null || Array.isArray(colorMap)) {
+    res.status(400).json({ error: 'colorMap must be an object' })
+    return
+  }
+  for (const [k, v] of Object.entries(colorMap)) {
+    if (typeof v !== 'string') {
+      res.status(400).json({ error: `colorMap["${k}"] must be a string` })
+      return
+    }
+  }
+  await admin.firestore().collection('appointments').doc(appt.id).update({
+    manualTubeColorMap: colorMap,
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+  res.json({ ok: true })
 }))
 
 // ─── POST /api/appointments/:id/confirm ──────────────────────────────────────
@@ -426,12 +533,18 @@ router.post('/:id/confirm', verifyAuth, asyncHandler(async (req: AuthRequest, re
   // to capture that: totalCost is never recomputed again after this point.
   const computedCost = resolvedTests.reduce((sum, t) => sum + t.cost, 0)
   const totalCost = appt.costOverride ?? computedCost
+  const pkgSampleGroups = computeResolvedSampleGroups(appt.packages, packagesById, resolvedTests)
+  const manualTubeGroups = buildManualTubeGroups(appt.manualTubeColorMap, appt.manualTestIds, resolvedTests)
+  const allSampleGroups = [...(pkgSampleGroups ?? []), ...manualTubeGroups]
+  const resolvedSampleGroups = allSampleGroups.length > 0 ? allSampleGroups : undefined
+
   const ref = admin.firestore().collection('appointments').doc(appt.id)
   await ref.update({
     resolvedTests,
+    ...(resolvedSampleGroups ? { resolvedSampleGroups } : {}),
     totalCost,
     status: 'Confirmed',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
@@ -500,7 +613,7 @@ router.post('/:id/cancel', verifyAuth, asyncHandler(async (req: AuthRequest, res
   }
 
   const ref = admin.firestore().collection('appointments').doc(appt.id)
-  await ref.update({ status: 'Cancelled', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+  await ref.update({ status: 'Cancelled', updatedAt: FieldValue.serverTimestamp() })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
 }))
@@ -543,7 +656,7 @@ router.post('/:id/status', verifyAuth, asyncHandler(async (req: AuthRequest, res
   }
 
   const ref = admin.firestore().collection('appointments').doc(appt.id)
-  await ref.update({ status, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+  await ref.update({ status, updatedAt: FieldValue.serverTimestamp() })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
 }))
@@ -560,7 +673,7 @@ router.post('/:id/delete', verifyAuth, asyncHandler(async (req: AuthRequest, res
   if (!appt) return
 
   const ref = admin.firestore().collection('appointments').doc(appt.id)
-  await ref.update({ status: 'Deleted', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+  await ref.update({ status: 'Deleted', updatedAt: FieldValue.serverTimestamp() })
   const updated = await ref.get()
   respondAppointment(res, 200, { id: updated.id, ...updated.data() })
 }))

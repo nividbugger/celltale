@@ -1,0 +1,8 @@
+C:\Temp\LisPublish\appsettings.json
+C:\Temp\LisPublish\LisMiddleware.Service.pdb
+C:\Temp\LisPublish\LisMiddleware.Core.pdb
+C:\Temp\LisPublish\LisMiddleware.Astm.pdb
+C:\Temp\LisPublish\LisMiddleware.Drivers.pdb
+C:\Temp\LisPublish\LisMiddleware.Api.pdb
+C:\Temp\LisPublish\LisMiddleware.Queue.pdb
+C:\Temp\LisPublish\LisMiddleware.Service.exe

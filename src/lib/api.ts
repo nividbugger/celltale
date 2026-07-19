@@ -184,20 +184,30 @@ export interface CreateTestRequest {
   name: string
   parameters: TestParameter[]
   cost?: number
+  tubeColor?: string
+  machineCode?: string
+  category?: string
 }
 
 export interface UpdateTestRequest {
   name?: string
   parameters?: TestParameter[]
   cost?: number
+  tubeColor?: string | null
+  machineCode?: string | null
+  category?: string | null
 }
 
 export interface AdminTestRecord {
   id: string
   testId: string
+  machineCode?: string
+  category?: string
+  isActive?: boolean
   name: string
   parameters: TestParameter[]
   cost?: number
+  tubeColor?: string
 }
 
 /** Admin: create a new test configuration. */
@@ -223,6 +233,14 @@ export async function updateTest(
 export async function deleteTest(testId: string): Promise<{ success: boolean }> {
   return apiFetch(`/admin/tests/${encodeURIComponent(testId)}`, {
     method: 'DELETE',
+  })
+}
+
+/** Admin: toggle whether a test is active (offered by this lab). */
+export async function toggleTestActive(testId: string, isActive: boolean): Promise<AdminTestRecord> {
+  return apiFetch(`/admin/tests/${encodeURIComponent(testId)}/active`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isActive }),
   })
 }
 
@@ -309,6 +327,13 @@ export interface AppointmentRecord {
   notes?: string
 }
 
+export interface SamplePreview {
+  sampleType: 'blood' | 'urine' | 'stool' | 'swab' | 'other'
+  /** Present when the tube comes from a named package sample group. */
+  label?: string
+  testNames: string[]
+}
+
 export interface AppointmentSummary {
   packages: AppointmentPackageEntry[]
   manualTestIds: string[]
@@ -321,6 +346,10 @@ export interface AppointmentSummary {
   costOverride: number | null
   /** costOverride ?? computedCost — what the UI should actually display/charge. */
   estimatedCost: number
+  /** One entry per physical tube/barcode that will be generated. Pre-confirm preview only. */
+  samplePreviews: SamplePreview[]
+  /** Current tube colour assignments for manually added tests (testId → colour name). */
+  manualTubeColorMap: Record<string, string>
 }
 
 export interface CreateAppointmentRequest {
@@ -390,6 +419,17 @@ export async function setAppointmentCostOverride(
   return apiFetch(`/appointments/${encodeURIComponent(id)}/cost-override`, {
     method: 'POST',
     body: JSON.stringify({ amount }),
+  })
+}
+
+/** Admin-only, pre-confirm: set per-test tube colour assignments for manually added tests. */
+export async function setManualTubeColors(
+  id: string,
+  colorMap: Record<string, string>,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/manual-tube-colors`, {
+    method: 'POST',
+    body: JSON.stringify({ colorMap }),
   })
 }
 
@@ -465,6 +505,7 @@ export interface SamplePrintPayload {
   date: string
   timeSlot: string
   testNames: string[]
+  tubeColor?: string
 }
 
 export async function getSampleApi(id: string): Promise<SampleRecord> {

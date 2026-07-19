@@ -173,7 +173,7 @@ export async function getAdminStats(): Promise<{
 export async function getAllPackages(): Promise<Package[]> {
   const q = query(collection(db, 'packages'), orderBy('order', 'asc'))
   const snap = await getDocs(q)
-  return snap.docs.map((d) => ({ ...d.data() } as Package))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Package))
 }
 
 export async function savePackage(pkg: Package): Promise<void> {
@@ -252,6 +252,11 @@ export async function getAllTests(): Promise<Test[]> {
   const snap = await getDocs(collection(db, 'tests'))
   const tests = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Test)
   return tests.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+export async function getActiveTests(): Promise<Test[]> {
+  const all = await getAllTests()
+  return all.filter((t) => t.isActive !== false)
 }
 
 export async function createTest(data: Omit<Test, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {

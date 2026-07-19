@@ -33,12 +33,18 @@ export interface TestParameter {
 export interface Test {
   id: string
   testId: string
+  machineCode?: string
+  category?: string
+  isActive?: boolean
   name: string
   parameters: TestParameter[]
   cost?: number
   /** What specimen this test is run on. Optional only for legacy rows created before this
    * field existed — the migration backfills it to 'other'; every new test must set it. */
   sampleType?: SampleType
+  /** Standard phlebotomy tube colour for this test (e.g. "Lavender" for EDTA/CBC).
+   * Used to auto-populate package sample-tube assignments. */
+  tubeColor?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -169,6 +175,11 @@ export interface Report {
 
 // ─── Packages ─────────────────────────────────────────────────────────────
 
+export interface PackageSampleGroup {
+  label: string
+  testIds: string[]
+}
+
 export interface PackageDetail {
   category: string
   text: string
@@ -187,6 +198,8 @@ export interface Package {
   summary: string[]
   details: PackageDetail[]
   testIds: string[]
+  /** Optional custom tube-split config. Absent = auto-group by sampleType. */
+  sampleGroups?: PackageSampleGroup[]
   order: number
 }
 

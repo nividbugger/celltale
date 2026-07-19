@@ -1,0 +1,13 @@
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\bin\Release\net8.0\LisMiddleware.Core.deps.json
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\bin\Release\net8.0\LisMiddleware.Core.dll
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\bin\Release\net8.0\LisMiddleware.Core.pdb
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.csproj.AssemblyReference.cache
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.AssemblyInfoInputs.cache
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.AssemblyInfo.cs
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.csproj.CoreCompileInputs.cache
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.sourcelink.json
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.dll
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\refint\LisMiddleware.Core.dll
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\LisMiddleware.Core.pdb
+C:\Users\sri.parthasarathy\Gen AI\celltale\lis-middleware\src\LisMiddleware.Core\obj\Release\net8.0\ref\LisMiddleware.Core.dll

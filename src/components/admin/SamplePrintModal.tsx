@@ -6,7 +6,7 @@ import { Button } from '../ui/Button'
 import { LoadingSpinner } from '../ui/LoadingSpinner'
 import { getAppointmentSamples, printSample, type SamplePrintPayload } from '../../lib/api'
 import { getAppointmentById, getUserDocument } from '../../lib/firestore'
-import { format, differenceInYears } from 'date-fns'
+import { differenceInYears } from 'date-fns'
 
 interface Props {
   isOpen: boolean
@@ -32,17 +32,32 @@ export function SamplePrintModal({ isOpen, onClose, appointmentId }: Props) {
     if (!isOpen) return
     setLoading(true)
     setError('')
+
     Promise.all([
-      getAppointmentSamples(appointmentId).then((samples) =>
-        Promise.all(samples.map((s) => printSample(s.id))),
-      ),
-      getAppointmentById(appointmentId).then((appt) =>
-        appt ? getUserDocument(appt.patientId) : null,
-      ),
+      getAppointmentById(appointmentId),
+      getAppointmentSamples(appointmentId),
     ])
+      .then(([appt, sampleRecords]) => {
+        type ApptWithGroups = { resolvedSampleGroups?: Array<{ label: string; testIds: string[] }> }
+        const groups = (appt as unknown as ApptWithGroups).resolvedSampleGroups
+
+        return Promise.all([
+          Promise.all(
+            sampleRecords.map((s) =>
+              printSample(s.id).then((payload) => {
+                if (payload.tubeColor) return payload
+                const match = groups?.find((g) => s.testIds.some((id) => g.testIds.includes(id)))
+                return { ...payload, tubeColor: match?.label ?? '' }
+              }),
+            ),
+          ),
+          appt ? getUserDocument(appt.patientId) : Promise.resolve(null),
+        ])
+      })
       .then(([printPayloads, patient]) => {
         setLabels(printPayloads)
         if (patient?.dob) setPatientAge(differenceInYears(new Date(), new Date(patient.dob)))
+        else if (typeof patient?.age === 'number') setPatientAge(patient.age)
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load samples'))
       .finally(() => setLoading(false))
@@ -69,30 +84,29 @@ export function SamplePrintModal({ isOpen, onClose, appointmentId }: Props) {
   function handlePrint() {
     if (labels.length === 0) return
 
-    const shortName = (label: SamplePrintPayload) => label.patientName.slice(0, 5).toUpperCase()
-    const labelName = (label: SamplePrintPayload) =>
-      patientAge !== null ? `${shortName(label)} (${patientAge})` : shortName(label)
+    const subIdLine = (label: SamplePrintPayload) => {
+      const namePart = label.patientName.slice(0, 7).toUpperCase()
+      const agePart = patientAge !== null ? String(patientAge) : ''
+      const colorPart = label.tubeColor ?? ''
+      return [namePart, agePart, colorPart].filter(Boolean).join(' | ')
+    }
 
     const renderLabel = (label: SamplePrintPayload) => {
       const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
       JsBarcode(tempSvg, label.barcodeId, {
         format: 'CODE128',
         width: 1.5,
-        height: 30,
+        height: 35,
         displayValue: true,
         fontSize: 9,
         font: 'monospace',
         textMargin: 1,
         margin: 2,
       })
-      const formattedDate = label.date ? format(new Date(label.date), 'dd MMM yyyy') : ''
       return `
         <div class="label" style="break-after: page;">
-          <div class="patient-name">${labelName(label)}</div>
-          <div class="sample-type">${label.sampleType.toUpperCase()}</div>
           ${tempSvg.outerHTML}
-          <div class="date-text">${formattedDate}${label.timeSlot ? ` &middot; ${label.timeSlot}` : ''}</div>
-          <div class="tests-text">${label.testNames.join(', ')}</div>
+          <div class="sub-id-text">${subIdLine(label)}</div>
         </div>
       `
     }
@@ -113,13 +127,7 @@ export function SamplePrintModal({ isOpen, onClose, appointmentId }: Props) {
       width: 51mm; height: 25mm; padding: 1mm 2mm;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
     }
-    .patient-name { font-size: 7pt; font-weight: bold; text-align: center; white-space: nowrap; }
-    .sample-type { font-size: 6pt; font-weight: bold; color: #0f766e; letter-spacing: 0.05em; }
-    .date-text { font-size: 6pt; color: #444; text-align: center; margin-top: 1px; }
-    .tests-text {
-      font-size: 5pt; color: #666; text-align: center; max-width: 100%;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
+    .sub-id-text { font-size: 7pt; font-weight: bold; font-family: monospace; text-align: center; letter-spacing: 0.04em; margin-top: 1px; }
     svg { display: block; margin: 0 auto; max-width: 46mm; }
   </style>
 </head>
@@ -158,9 +166,14 @@ export function SamplePrintModal({ isOpen, onClose, appointmentId }: Props) {
                 >
                   <svg ref={(el) => { svgRefs.current[label.sampleId] = el }} />
                   <div className="text-sm min-w-0 flex-1">
-                    <p className="font-semibold text-slate-900 capitalize">{label.sampleType} sample</p>
-                    <p className="text-xs text-slate-500 truncate">{label.testNames.join(', ')}</p>
-                    <p className="text-xs font-mono text-slate-400 mt-0.5">{label.barcodeId}</p>
+                    <p className="text-xs font-mono text-slate-400">{label.barcodeId}</p>
+                    <p className="text-xs font-mono font-bold text-slate-800 mt-0.5">
+                      {[
+                        label.patientName.slice(0, 7).toUpperCase(),
+                        patientAge !== null ? String(patientAge) : '',
+                        label.tubeColor ?? '',
+                      ].filter(Boolean).join(' | ')}
+                    </p>
                   </div>
                 </div>
               ))}
