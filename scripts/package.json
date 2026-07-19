@@ -1,0 +1,17 @@
+{
+  "name": "celltale-migrations",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-off, manually-run data migration scripts for the LIMS refactor. Not deployed as a Cloud Function.",
+  "scripts": {
+    "migrate-lims": "ts-node migrate-lims.ts"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.0"
+  }
+}
