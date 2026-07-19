@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
-import { createAppointment } from '../../lib/firestore'
+import { createAppointmentApi, addPackagesToAppointment, confirmAppointment, generateSamples } from '../../lib/api'
 import { usePackages } from '../../hooks/usePackages'
 import { TIME_SLOTS, type Package } from '../../types'
 import { addDays, format } from 'date-fns'
@@ -48,19 +48,18 @@ export default function BookAppointmentPage() {
       return
     }
     try {
-      await createAppointment({
+      const appt = await createAppointmentApi({
         patientId: userProfile.uid,
-        patientName: userProfile.name,
-        patientPhone: userProfile.phone,
-        packageId: selectedPackage.id,
-        packageName: selectedPackage.name,
-        packagePrice: selectedPackage.price,
         date,
         timeSlot,
         collectionAddress: address,
-        status: 'Pending',
         ...(notes ? { notes } : {}),
       })
+      // Same call sequence the admin walk-in flow uses (create -> select -> confirm ->
+      // generate-samples) — patient and admin bookings share one code path end to end.
+      await addPackagesToAppointment(appt.id, [selectedPackage.id])
+      await confirmAppointment(appt.id)
+      await generateSamples(appt.id)
       navigate('/dashboard/appointments')
     } catch (e: unknown) {
       const msg = (e as { message?: string }).message ?? 'Unknown error'

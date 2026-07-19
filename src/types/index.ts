@@ -22,6 +22,8 @@ export interface User {
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
+export type SampleType = 'blood' | 'urine' | 'stool' | 'swab' | 'other'
+
 export interface TestParameter {
   parameter: string
   unit: string
@@ -34,13 +36,18 @@ export interface Test {
   name: string
   parameters: TestParameter[]
   cost?: number
+  /** What specimen this test is run on. Optional only for legacy rows created before this
+   * field existed — the migration backfills it to 'other'; every new test must set it. */
+  sampleType?: SampleType
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 
 // ─── Appointments ─────────────────────────────────────────────────────────
 
-export type AppointmentStatus =
+/** Old status vocabulary. Preserved only as the type of `Appointment.legacyStatus` for
+ * migrated rows — no new code should read or write this. */
+export type LegacyAppointmentStatus =
   | 'Pending'
   | 'Confirmed'
   | 'Sample Collected'
@@ -49,14 +56,64 @@ export type AppointmentStatus =
   | 'Cancelled'
   | 'Deleted'
 
+export type AppointmentStatus =
+  | 'Created'
+  | 'Confirmed'
+  | 'SamplesGenerating'
+  | 'SamplesGenerated'
+  | 'SamplesCollected'
+  | 'InLaboratory'
+  | 'ReportGenerated'
+  | 'ReportUploaded'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Deleted'
+
+/** Which package(s) an appointment drew tests from — provenance/billing metadata only.
+ * Never read by sample generation, barcode, collection, lab, or reporting logic. */
+export interface AppointmentPackageEntry {
+  packageId: string
+  packageName: string
+  priceAtBooking: number
+}
+
+/** A test as it was at the moment the appointment was confirmed — snapshotted, not a live
+ * reference, so editing/deleting the underlying Test afterward can't change what a
+ * historical appointment "means". This is the payload sample generation actually reads. */
+export interface ResolvedTest {
+  testId: string
+  name: string
+  sampleType: SampleType
+  cost: number
+  origin: 'package' | 'manual'
+  sourcePackageId?: string
+}
+
 export interface Appointment {
   id: string
   patientId: string
   patientName: string
   patientPhone: string
-  packageId: string
-  packageName: string
-  packagePrice: number
+
+  // LEGACY — kept permanently, read-only, never written by new code paths.
+  packageId?: string
+  packageName?: string
+  packagePrice?: number
+  barcodeId?: string
+  legacyStatus?: LegacyAppointmentStatus
+
+  // Provenance (denormalized; packageName/priceAtBooking do not update retroactively if the
+  // source package is later renamed/repriced).
+  packages: AppointmentPackageEntry[]
+  manualTestIds: string[]
+  /** Frozen at confirm(). Empty pre-confirm. */
+  resolvedTests: ResolvedTest[]
+  /** Denormalized pointer list — source of truth is the `samples` collection. */
+  sampleIds: string[]
+  /** Sum of resolvedTests[].cost, computed once at confirm(). */
+  totalCost: number
+  invoiceId?: string
+
   date: string
   timeSlot: string
   collectionAddress: string
@@ -64,7 +121,27 @@ export interface Appointment {
   createdAt: Timestamp
   updatedAt: Timestamp
   notes?: string
-  barcodeId?: string
+}
+
+// ─── Samples ──────────────────────────────────────────────────────────────
+
+export type SampleCollectionStatus = 'pending' | 'collected' | 'rejected'
+
+export interface Sample {
+  id: string
+  appointmentId: string
+  patientId: string
+  sampleType: SampleType
+  /** Copied verbatim from the appointment's resolvedTests at generation time — never
+   * re-derived later (e.g. a rejected sample's replacement copies this from the original). */
+  testIds: string[]
+  barcodeId: string
+  collectionStatus: SampleCollectionStatus
+  collectionDatetime?: Timestamp
+  collector?: string
+  remarks?: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────
@@ -238,13 +315,23 @@ export const TIME_SLOTS: string[] = [
 // ─── Status Colors ────────────────────────────────────────────────────────
 
 export const STATUS_COLORS: Record<AppointmentStatus, string> = {
-  Pending: 'bg-yellow-100 text-yellow-800',
+  Created: 'bg-yellow-100 text-yellow-800',
   Confirmed: 'bg-blue-100 text-blue-800',
-  'Sample Collected': 'bg-indigo-100 text-indigo-800',
-  'Report Ready': 'bg-teal-100 text-teal-800',
+  SamplesGenerating: 'bg-blue-100 text-blue-800',
+  SamplesGenerated: 'bg-indigo-100 text-indigo-800',
+  SamplesCollected: 'bg-indigo-100 text-indigo-800',
+  InLaboratory: 'bg-purple-100 text-purple-800',
+  ReportGenerated: 'bg-teal-100 text-teal-800',
+  ReportUploaded: 'bg-teal-100 text-teal-800',
   Completed: 'bg-green-100 text-green-800',
   Cancelled: 'bg-red-100 text-red-800',
   Deleted: 'bg-slate-100 text-slate-500',
+}
+
+export const SAMPLE_STATUS_COLORS: Record<SampleCollectionStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  collected: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
 }
 
 // ─── Clinic Settings ──────────────────────────────────────────────────────
@@ -294,6 +381,10 @@ export interface Invoice {
   billToContact?: string
   lineItems: InvoiceLineItem[]
   receivedAmount: number
+  /** Links this invoice back to the appointment/patient it bills for. Neither field existed
+   * before this refactor — invoices were previously free-standing, keyed only on billToName. */
+  appointmentId?: string
+  patientId?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }

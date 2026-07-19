@@ -10,11 +10,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
   getAppointmentById,
   getReportByAppointmentId,
-  getAllPackages,
   getAllTests,
   createReport,
-  updateAppointmentStatus,
 } from '../../lib/firestore'
+import { markReportUploaded } from '../../lib/api'
+import { describePackages } from '../../lib/appointmentDisplay'
 import type { Appointment, Test, TestValue } from '../../types'
 
 interface ReportRow {
@@ -46,16 +46,18 @@ export default function AdminGenerateReportPage() {
     Promise.all([
       getAppointmentById(appointmentId),
       getReportByAppointmentId(appointmentId),
-      getAllPackages(),
       getAllTests(),
-    ]).then(([appt, existingReport, pkgs, allTests]) => {
+    ]).then(([appt, existingReport, allTests]) => {
       setAppointment(appt)
       if (existingReport) setAlreadyExists(true)
       setTests(allTests)
 
+      // Reads the appointment's own frozen resolvedTests snapshot — NOT a live package lookup.
+      // The old version re-fetched `packages` and read `pkg.testIds` here, which meant editing
+      // a package after the appointment was booked could silently change what tests a
+      // historical appointment's report defaulted to.
       if (appt) {
-        const pkg = pkgs.find((p) => p.id === appt.packageId)
-        setSelectedTestIds(pkg?.testIds ?? [])
+        setSelectedTestIds(appt.resolvedTests.map((t) => t.testId))
       }
       setLoading(false)
     })
@@ -119,10 +121,9 @@ export default function AdminGenerateReportPage() {
         patientId: appointment.patientId,
         testValues,
         summary: summary.trim() || undefined,
-        packageId: appointment.packageId || undefined,
         testIds: selectedTestIds,
       })
-      await updateAppointmentStatus(appointmentId, 'Report Ready')
+      await markReportUploaded(appointmentId, appointment.status)
       navigate('/admin/appointments')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -177,7 +178,7 @@ export default function AdminGenerateReportPage() {
             <div className="mb-6">
               <h1 className="text-2xl font-extrabold text-slate-900">Generate Report</h1>
               <p className="text-slate-500 text-sm mt-1">
-                {appointment.patientName} · {appointment.packageName} · {appointment.date}
+                {appointment.patientName} · {describePackages(appointment)} · {appointment.date}
               </p>
             </div>
 

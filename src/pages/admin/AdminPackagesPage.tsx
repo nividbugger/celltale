@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import {
-  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save, RotateCcw, Search, X
+  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save, RotateCcw
 } from 'lucide-react'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
@@ -12,6 +12,7 @@ import { Modal } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllPackages, savePackage, deletePackage, reorderPackages, getAllTests } from '../../lib/firestore'
+import { TestPicker } from '../../components/admin/TestPicker'
 import { PACKAGES as STATIC_PACKAGES } from '../../types'
 import type { Package, PackageDetail, Test } from '../../types'
 
@@ -53,7 +54,6 @@ const COLOR_PRESETS = [
 // ─── Form types ─────────────────────────────────────────────────────────────
 
 interface PackageFormData {
-  id: string
   name: string
   price: number
   isPopular: boolean
@@ -63,9 +63,16 @@ interface PackageFormData {
   testIds: string[]
 }
 
+/** Mirrors `generateTestId()` in `api/src/routes/adminTests.ts` — packages are internal
+ * database keys, not something an admin should be typing by hand (free-text IDs risk typos,
+ * accidental collisions, and non-URL-safe characters with no real benefit over a generated
+ * one, since nothing downstream needs a human-readable package ID). */
+function generatePackageId(): string {
+  return `PKG-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+}
+
 function toFormData(pkg: Package, presetIdx: number): PackageFormData {
   return {
-    id: pkg.id,
     name: pkg.name,
     price: pkg.price,
     isPopular: pkg.isPopular,
@@ -88,6 +95,7 @@ function computeSuggestedPrice(testIds: string[], allTests: Test[]): number {
 }
 
 function fromFormData(
+  id: string,
   data: PackageFormData,
   order: number,
   allTests: Test[],
@@ -95,7 +103,7 @@ function fromFormData(
 ): Package {
   const preset = COLOR_PRESETS[data.colorPreset] ?? COLOR_PRESETS[0]
   return {
-    id: data.id.trim().toLowerCase().replace(/\s+/g, '-'),
+    id,
     name: data.name,
     price: Number(data.price),
     testCount: computeTestCount(data.testIds, allTests),
@@ -122,13 +130,13 @@ function detectPreset(pkg: Package): number {
 
 function PackageForm({
   pkg,
-  existingIds,
+  nextOrder,
   allTests,
   onSave,
   onCancel,
 }: {
   pkg: Package | null
-  existingIds: string[]
+  nextOrder: number
   allTests: Test[]
   onSave: (p: Package) => void
   onCancel: () => void
@@ -136,8 +144,6 @@ function PackageForm({
   const isNew = pkg === null
   const presetIdx = pkg ? Math.max(0, detectPreset(pkg)) : 0
   const priceTouched = useRef(!isNew)
-  const [testSearch, setTestSearch] = useState('')
-  const [testDropdownOpen, setTestDropdownOpen] = useState(false)
 
   const {
     register,
@@ -150,7 +156,6 @@ function PackageForm({
     defaultValues: pkg
       ? toFormData(pkg, presetIdx)
       : {
-          id: '',
           name: '',
           price: 0,
           isPopular: false,
@@ -184,8 +189,9 @@ function PackageForm({
   }
 
   async function onSubmit(data: PackageFormData) {
-    const order = pkg?.order ?? existingIds.length
-    const result = fromFormData(data, order, allTests, pkg?.details ?? [])
+    const order = pkg?.order ?? nextOrder
+    const id = pkg?.id ?? generatePackageId()
+    const result = fromFormData(id, data, order, allTests, pkg?.details ?? [])
     await savePackage(result)
     onSave(result)
   }
@@ -197,23 +203,6 @@ function PackageForm({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Basic info */}
       <div className="grid grid-cols-2 gap-4">
-        {isNew && (
-          <div className="col-span-2">
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
-              Package ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              {...register('id', {
-                required: 'Required',
-                validate: (v) =>
-                  !existingIds.includes(v.toLowerCase()) || 'ID already exists',
-              })}
-              placeholder="e.g. premium"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            {errors.id && <p className="text-red-500 text-xs mt-1">{errors.id.message}</p>}
-          </div>
-        )}
         <div className="col-span-2">
           <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
             Package Name <span className="text-red-500">*</span>
@@ -331,87 +320,9 @@ function PackageForm({
         <Controller
           control={control}
           name="testIds"
-          render={({ field }) => {
-            const selectedTests = field.value
-              .map((id: string) => allTests.find((t) => t.id === id))
-              .filter((t): t is Test => Boolean(t))
-            const candidates = allTests.filter(
-              (t) => !field.value.includes(t.id) && t.name.toLowerCase().includes(testSearch.toLowerCase()),
-            )
-
-            function addTest(id: string) {
-              field.onChange([...field.value, id])
-              setTestSearch('')
-            }
-
-            function removeTest(id: string) {
-              field.onChange(field.value.filter((v: string) => v !== id))
-            }
-
-            return (
-              <div>
-                {selectedTests.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedTests.map((t) => (
-                      <span
-                        key={t.id}
-                        className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-full pl-3 pr-1.5 py-1 text-xs font-medium"
-                      >
-                        {t.name}
-                        <span className="text-teal-400">
-                          · {t.parameters.length} param{t.parameters.length === 1 ? '' : 's'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeTest(t.id)}
-                          className="p-0.5 rounded-full hover:bg-teal-100 text-teal-500 hover:text-teal-700"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={testSearch}
-                    onChange={(e) => setTestSearch(e.target.value)}
-                    onFocus={() => setTestDropdownOpen(true)}
-                    onBlur={() => setTimeout(() => setTestDropdownOpen(false), 100)}
-                    placeholder={allTests.length === 0 ? 'No tests created yet' : 'Search tests by name...'}
-                    disabled={allTests.length === 0}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50 disabled:text-slate-400"
-                  />
-                  {testDropdownOpen && candidates.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg divide-y divide-slate-50">
-                      {candidates.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onMouseDown={() => addTest(t.id)}
-                          className="w-full flex items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50"
-                        >
-                          <span className="text-sm text-slate-700">{t.name}</span>
-                          <span className="text-xs text-slate-400 shrink-0">
-                            {t.parameters.length} param{t.parameters.length === 1 ? '' : 's'}
-                            {t.cost != null ? ` · ₹${t.cost}` : ''}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {testDropdownOpen && testSearch && candidates.length === 0 && (
-                    <div className="absolute z-10 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg px-3 py-2 text-sm text-slate-400">
-                      No matching tests
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          }}
+          render={({ field }) => (
+            <TestPicker selectedIds={field.value} allTests={allTests} onChange={field.onChange} />
+          )}
         />
       </div>
 
@@ -547,8 +458,6 @@ export default function AdminPackagesPage() {
     })
     setEditPkg(null)
   }
-
-  const existingIds = packages.map((p) => p.id)
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -712,7 +621,7 @@ export default function AdminPackagesPage() {
         {editPkg !== null && (
           <PackageForm
             pkg={editPkg === 'new' ? null : (editPkg as Package)}
-            existingIds={existingIds}
+            nextOrder={packages.length}
             allTests={allTests}
             onSave={handleSaved}
             onCancel={() => setEditPkg(null)}

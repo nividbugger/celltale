@@ -8,22 +8,32 @@ import {
   reportReadyTemplate,
   type AppointmentEmailData,
 } from '../email/templates'
+import { describePackages } from '../appointmentDisplay'
 import { config } from '../config'
 
 type AppointmentStatus =
-  | 'Pending'
+  | 'Created'
   | 'Confirmed'
-  | 'Sample Collected'
-  | 'Report Ready'
+  | 'SamplesGenerating'
+  | 'SamplesGenerated'
+  | 'SamplesCollected'
+  | 'InLaboratory'
+  | 'ReportGenerated'
+  | 'ReportUploaded'
   | 'Completed'
   | 'Cancelled'
+  | 'Deleted'
 
 /**
  * Fires when an appointment document is updated.
  * Sends status-specific emails when the status changes to:
  *   – Confirmed        → appointment confirmed email
- *   – Sample Collected → sample collected email
- *   – Report Ready     → report ready email
+ *   – SamplesCollected → sample collected email
+ *   – ReportUploaded   → report ready email
+ *   – Cancelled        → appointment cancelled email
+ * All other status values (Created, SamplesGenerating, SamplesGenerated, InLaboratory,
+ * ReportGenerated, Completed, Deleted) intentionally send no email, matching pre-refactor
+ * behavior for the equivalent old statuses.
  */
 export const onAppointmentUpdated = onDocumentUpdated(
   { document: 'appointments/{appointmentId}', region: config.region },
@@ -46,8 +56,8 @@ export const onAppointmentUpdated = onDocumentUpdated(
 
     const templateData: AppointmentEmailData = {
       patientName: after.patientName,
-      packageName: after.packageName,
-      packagePrice: after.packagePrice,
+      packageName: describePackages(after),
+      packagePrice: after.totalCost ?? after.packagePrice ?? 0,
       date: after.date,
       timeSlot: after.timeSlot,
       collectionAddress: after.collectionAddress,
@@ -64,7 +74,7 @@ export const onAppointmentUpdated = onDocumentUpdated(
         })
         break
 
-      case 'Sample Collected':
+      case 'SamplesCollected':
         await sendEmail({
           to: patientEmail,
           subject: `🧪 Sample Collected – Processing Underway`,
@@ -72,10 +82,10 @@ export const onAppointmentUpdated = onDocumentUpdated(
         })
         break
 
-      case 'Report Ready':
+      case 'ReportUploaded':
         await sendEmail({
           to: patientEmail,
-          subject: `📄 Your ${after.packageName} Report is Ready`,
+          subject: `📄 Your ${templateData.packageName} Report is Ready`,
           html: reportReadyTemplate(templateData),
         })
         break
@@ -83,13 +93,14 @@ export const onAppointmentUpdated = onDocumentUpdated(
       case 'Cancelled':
         await sendEmail({
           to: patientEmail,
-          subject: `❌ Appointment Cancelled – ${after.packageName} on ${after.date}`,
+          subject: `❌ Appointment Cancelled – ${templateData.packageName} on ${after.date}`,
           html: appointmentCancelledTemplate(templateData),
         })
         break
 
       default:
-        // Completed / Pending – no email
+        // Created / SamplesGenerating / SamplesGenerated / InLaboratory / ReportGenerated /
+        // Completed / Deleted – no email
         break
     }
   },

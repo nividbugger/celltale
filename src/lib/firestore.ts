@@ -20,7 +20,6 @@ import { db } from './firebase'
 import type {
   User,
   Appointment,
-  AppointmentStatus,
   Report,
   TestValue,
   Package,
@@ -60,18 +59,9 @@ export async function updateUserDocument(
 }
 
 // ─── Appointments ─────────────────────────────────────────────────────────
-
-export async function createAppointment(
-  data: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>,
-): Promise<string> {
-  const ref = await addDoc(collection(db, 'appointments'), {
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
-  // Email is sent automatically by the onAppointmentCreated Cloud Function trigger.
-  return ref.id
-}
+// Mutations (create, status transitions, sample/barcode generation) go through the
+// `/api/appointments` and `/api/samples` Express API (see src/lib/api.ts) so admin and
+// patient flows share one code path. Only read-only queries remain here.
 
 export async function getAppointmentsByPatient(patientId: string): Promise<Appointment[]> {
   const q = query(
@@ -92,36 +82,6 @@ export async function getAllAppointments(): Promise<Appointment[]> {
 export async function getAppointmentById(id: string): Promise<Appointment | null> {
   const snap = await getDoc(doc(db, 'appointments', id))
   return snap.exists() ? ({ id: snap.id, ...snap.data() } as Appointment) : null
-}
-
-export async function updateAppointmentStatus(
-  id: string,
-  status: AppointmentStatus,
-  notes?: string,
-): Promise<void> {
-  const data: Record<string, unknown> = { status, updatedAt: serverTimestamp() }
-  if (notes !== undefined) data.notes = notes
-  await updateDoc(doc(db, 'appointments', id), data)
-  // Status-change email is sent automatically by the onAppointmentUpdated Cloud Function trigger.
-}
-
-function generateBarcodeId(): string {
-  const now = new Date()
-  const yy = String(now.getFullYear()).slice(2)
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  const rand = String(Math.floor(Math.random() * 10000)).padStart(4, '0')
-  return `${yy}${mm}${dd}${rand}`
-}
-
-export async function assignBarcodeId(appointmentId: string): Promise<string> {
-  const snap = await getDoc(doc(db, 'appointments', appointmentId))
-  if (!snap.exists()) throw new Error('Appointment not found')
-  const existing = snap.data().barcodeId as string | undefined
-  if (existing) return existing
-  const barcodeId = generateBarcodeId()
-  await updateDoc(doc(db, 'appointments', appointmentId), { barcodeId })
-  return barcodeId
 }
 
 export async function softDeleteAppointment(id: string): Promise<void> {
@@ -195,7 +155,7 @@ export async function getAdminStats(): Promise<{
   const [totalSnap, pendingSnap, patientsSnap, reportsSnap] = await Promise.all([
     getCountFromServer(collection(db, 'appointments')),
     getCountFromServer(
-      query(collection(db, 'appointments'), where('status', '==', 'Pending')),
+      query(collection(db, 'appointments'), where('status', '==', 'Created')),
     ),
     getCountFromServer(query(collection(db, 'users'), where('role', '==', 'patient'))),
     getCountFromServer(collection(db, 'reports')),

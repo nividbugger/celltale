@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { Users, Search, UserPlus, Pencil, Eye } from 'lucide-react'
+import { Users, Search, UserPlus, Pencil, Eye, Trash2, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Modal } from '../../components/ui/Modal'
@@ -13,7 +13,7 @@ import { PatientBarcodePrintModal } from '../../components/admin/PatientBarcodeP
 import { PatientDetailModal } from '../../components/admin/PatientDetailModal'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllPatients } from '../../lib/firestore'
-import { registerPatient, updatePatient } from '../../lib/api'
+import { registerPatient, updatePatient, deletePatient } from '../../lib/api'
 import type { User } from '../../types'
 import { format } from 'date-fns'
 
@@ -177,6 +177,76 @@ function PatientForm({
   )
 }
 
+function DeletePatientModal({
+  patient,
+  onClose,
+  onDeleted,
+}: {
+  patient: User
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const [confirmText, setConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
+
+  const canDelete = confirmText.trim() === patient.name.trim()
+
+  async function handleDelete() {
+    setDeleting(true)
+    setError('')
+    try {
+      await deletePatient(patient.uid)
+      onDeleted()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete patient')
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} title="Delete Patient" size="sm">
+      <div className="space-y-4">
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex gap-2.5">
+          <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700">
+            This permanently deletes <span className="font-semibold">{patient.name}</span>'s login
+            account and every appointment, sample, and report tied to them. This cannot be
+            undone. If they come in again, they'll be registered as a brand-new patient with no
+            history.
+          </p>
+        </div>
+        <div>
+          <label className="text-sm font-medium text-slate-700 block mb-1">
+            Type <span className="font-bold">{patient.name}</span> to confirm
+          </label>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            autoFocus
+          />
+        </div>
+        {error && <p className="text-red-500 text-xs">{error}</p>}
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 bg-red-600 hover:bg-red-700"
+            disabled={!canDelete}
+            loading={deleting}
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-4 w-4 mr-1" /> Delete Permanently
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export default function AdminPatientsPage() {
   const { logOut } = useAuth()
   const [patients, setPatients] = useState<User[]>([])
@@ -185,6 +255,7 @@ export default function AdminPatientsPage() {
   const [editPatient, setEditPatient] = useState<User | 'new' | null>(null)
   const [showQRCode, setShowQRCode] = useState<User | null>(null)
   const [viewPatient, setViewPatient] = useState<User | null>(null)
+  const [deletePatientTarget, setDeletePatient] = useState<User | null>(null)
 
   useEffect(() => {
     getAllPatients()
@@ -337,6 +408,15 @@ export default function AdminPatientsPage() {
                         <Button size="sm" variant="outline" onClick={() => setEditPatient(patient)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDeletePatient(patient)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 hover:border-red-300"
+                          title="Delete patient"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -368,6 +448,17 @@ export default function AdminPatientsPage() {
       {showQRCode && <PatientBarcodePrintModal isOpen={showQRCode !== null} onClose={() => setShowQRCode(null)} patient={showQRCode} />}
 
       {viewPatient && <PatientDetailModal isOpen={viewPatient !== null} onClose={() => setViewPatient(null)} patient={viewPatient} />}
+
+      {deletePatientTarget && (
+        <DeletePatientModal
+          patient={deletePatientTarget}
+          onClose={() => setDeletePatient(null)}
+          onDeleted={() => {
+            setPatients((prev) => prev.filter((p) => p.uid !== deletePatientTarget.uid))
+            setDeletePatient(null)
+          }}
+        />
+      )}
     </div>
   )
 }

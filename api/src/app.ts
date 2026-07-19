@@ -7,6 +7,9 @@ import emailRouter from './routes/email'
 import paymentsRouter from './routes/payments'
 import adminPatientsRouter from './routes/adminPatients'
 import adminTestsRouter from './routes/adminTests'
+import adminInvoicesRouter from './routes/adminInvoices'
+import appointmentsRouter from './routes/appointments'
+import samplesRouter from './routes/samples'
 
 export const app = express()
 
@@ -65,6 +68,9 @@ app.use('/api/email', emailRouter)
 app.use('/api/payments', paymentsRouter)
 app.use('/api/admin/patients', adminPatientsRouter)
 app.use('/api/admin/tests', adminTestsRouter)
+app.use('/api/admin/invoices', adminInvoicesRouter)
+app.use('/api/appointments', appointmentsRouter)
+app.use('/api/samples', samplesRouter)
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
