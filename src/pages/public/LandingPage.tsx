@@ -104,6 +104,10 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {pkgsLoading ? (
               <div className="col-span-3"><LoadingSpinner className="py-12" /></div>
+            ) : packages.length === 0 ? (
+              <p className="col-span-3 text-center text-slate-400 py-12">
+                No packages are available right now — please check back shortly.
+              </p>
             ) : packages.map((pkg) => {
               const isExpanded = expandedPkg === pkg.id
               return (

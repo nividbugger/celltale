@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { getAllPackages } from '../lib/firestore'
-import { PACKAGES as STATIC_PACKAGES } from '../types'
 import type { Package } from '../types'
 
 export function usePackages() {
@@ -10,14 +9,12 @@ export function usePackages() {
 
   const fetchPackages = () => {
     setLoading(true)
+    setError(null)
     getAllPackages()
-      .then((pkgs) => {
-        // Fall back to static seed data if Firestore is empty
-        setPackages(pkgs.length > 0 ? pkgs : STATIC_PACKAGES)
-      })
+      .then(setPackages)
       .catch((e) => {
         setError(e.message)
-        setPackages(STATIC_PACKAGES)
+        setPackages([])
       })
       .finally(() => setLoading(false))
   }
