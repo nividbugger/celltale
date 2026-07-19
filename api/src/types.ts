@@ -58,6 +58,9 @@ export interface TestDoc {
   name: string
   sampleType?: SampleType
   cost?: number
+  machineCode?: string
+  category?: string
+  parameters?: Array<{ parameter: string; unit: string; biologicalReference: string }>
 }
 
 export interface PackageSampleGroup {
