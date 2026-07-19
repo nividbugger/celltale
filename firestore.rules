@@ -14,15 +14,26 @@ service cloud.firestore {
 
     match /appointments/{appointmentId} {
       allow read:   if request.auth.uid == resource.data.patientId || isAdmin();
-      allow create: if request.auth != null
-                    && request.resource.data.patientId == request.auth.uid;
-      allow update: if isAdmin()
-                    || (request.auth.uid == resource.data.patientId
-                        && request.resource.data.status == 'Cancelled');
+      // All mutations now go through the /api/appointments Express API (Admin SDK, bypasses
+      // these rules) so appointment-state-machine validation and sample-generation guards can
+      // never be skipped via a direct client write. Previously `create` allowed any
+      // authenticated patient to write their own appointment directly — that path (and the
+      // unguarded self-cancel `update` path) is what made walk-in creation and safe
+      // cancellation-after-collection impossible to enforce; removed as part of this refactor.
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
+      allow read:  if request.auth.uid == resource.data.patientId || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Samples are created/mutated exclusively via the Admin SDK (Express API), which
+    // bypasses these rules — this block is defense-in-depth so intent is explicit rather
+    // than relying on Firestore's default-deny for an unlisted collection.
+    match /samples/{sampleId} {
       allow read:  if request.auth.uid == resource.data.patientId || isAdmin();
       allow write: if isAdmin();
     }

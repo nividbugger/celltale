@@ -19,6 +19,7 @@ import ProfilePage from './pages/patient/ProfilePage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminAppointmentsPage from './pages/admin/AdminAppointmentsPage'
+import AdminNewAppointmentPage from './pages/admin/AdminNewAppointmentPage'
 import AdminUploadReportPage from './pages/admin/AdminUploadReportPage'
 import AdminGenerateReportPage from './pages/admin/AdminGenerateReportPage'
 import AdminPatientsPage from './pages/admin/AdminPatientsPage'
@@ -94,6 +95,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminAppointmentsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/appointments/new/:appointmentId?"
+            element={
+              <AdminRoute>
+                <AdminNewAppointmentPage />
               </AdminRoute>
             }
           />

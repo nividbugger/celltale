@@ -8,7 +8,8 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAppointmentById, createReport, getReportByAppointmentId } from '../../lib/firestore'
-import { updateAppointmentStatus } from '../../lib/firestore'
+import { markReportUploaded } from '../../lib/api'
+import { describePackages } from '../../lib/appointmentDisplay'
 import { uploadReportPDF } from '../../lib/storage'
 import type { Appointment } from '../../types'
 
@@ -52,7 +53,7 @@ export default function AdminUploadReportPage() {
         pdfUrl,
         testValues: [],
       })
-      await updateAppointmentStatus(appointmentId, 'Report Ready')
+      await markReportUploaded(appointmentId, appointment.status)
       navigate('/admin/appointments')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -110,7 +111,7 @@ export default function AdminUploadReportPage() {
             <div className="mb-6">
               <h1 className="text-2xl font-extrabold text-slate-900">Upload Report</h1>
               <p className="text-slate-500 text-sm mt-1">
-                {appointment.patientName} · {appointment.packageName} · {appointment.date}
+                {appointment.patientName} · {describePackages(appointment)} · {appointment.date}
               </p>
             </div>
 

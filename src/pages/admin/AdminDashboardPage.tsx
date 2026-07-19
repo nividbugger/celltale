@@ -8,6 +8,7 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAdminStats, getAllAppointments } from '../../lib/firestore'
+import { describePackages } from '../../lib/appointmentDisplay'
 import type { Appointment } from '../../types'
 import { format } from 'date-fns'
 
@@ -159,7 +160,7 @@ export default function AdminDashboardPage() {
                     <tr key={appt.id} className="hover:bg-slate-50">
                       <td className="px-6 py-3 font-medium text-slate-900">{appt.patientName}</td>
                       <td className="px-6 py-3 text-slate-600 hidden sm:table-cell">
-                        {appt.packageName}
+                        {describePackages(appt)}
                       </td>
                       <td className="px-6 py-3 text-slate-600 hidden md:table-cell">
                         {format(new Date(appt.date), 'dd MMM yyyy')}

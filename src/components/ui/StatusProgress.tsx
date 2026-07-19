@@ -1,16 +1,23 @@
 import type { AppointmentStatus } from '../../types'
 
 const STEP_LABELS = ['Booked', 'Confirmed', 'Collected', 'Report', 'Done']
-const STEP_STATUSES: AppointmentStatus[] = [
-  'Pending',
-  'Confirmed',
-  'Sample Collected',
-  'Report Ready',
-  'Completed',
-]
+
+/** Statuses between two steps (e.g. SamplesGenerating between Confirmed/SamplesCollected)
+ * fall back to the nearest earlier step so the progress bar never regresses or breaks. */
+const STATUS_TO_STEP: Partial<Record<AppointmentStatus, number>> = {
+  Created: 0,
+  Confirmed: 1,
+  SamplesGenerating: 1,
+  SamplesGenerated: 1,
+  SamplesCollected: 2,
+  InLaboratory: 2,
+  ReportGenerated: 3,
+  ReportUploaded: 3,
+  Completed: 4,
+}
 
 export function StatusProgress({ status }: { status: AppointmentStatus }) {
-  const step = STEP_STATUSES.indexOf(status)
+  const step = STATUS_TO_STEP[status] ?? -1
 
   if (status === 'Cancelled') {
     return (

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  UploadCloud,
   ChevronDown,
   ChevronUp,
   RefreshCw,
@@ -13,6 +12,9 @@ import {
   Eye,
   Printer,
   AlertTriangle,
+  Plus,
+  Truck,
+  PackageCheck,
 } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
@@ -23,46 +25,135 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAllAppointments } from '../../hooks/useAppointments'
+import { getReportByAppointmentId, getClinicSettings } from '../../lib/firestore'
+import { describePackages, describeCost } from '../../lib/appointmentDisplay'
 import {
-  updateAppointmentStatus,
-  softDeleteAppointment,
-  getReportByAppointmentId,
-  getClinicSettings,
-} from '../../lib/firestore'
+  confirmAppointment,
+  generateSamples,
+  cancelAppointment,
+  setAppointmentStatus,
+  deleteAppointmentApi,
+  getAppointmentSamples,
+  collectSample,
+  type SampleRecord,
+} from '../../lib/api'
 import { buildReportHtml } from '../../lib/reportHtml'
-import { BarcodePrintModal } from '../../components/admin/BarcodePrintModal'
+import { SamplePrintModal } from '../../components/admin/SamplePrintModal'
 import { DEFAULT_CLINIC_SETTINGS } from '../../types'
 import type { Appointment, AppointmentStatus, ClinicSettings, Report } from '../../types'
 import { format } from 'date-fns'
 
 const ACTIVE_STATUSES: AppointmentStatus[] = [
-  'Pending',
+  'Created',
   'Confirmed',
-  'Sample Collected',
-  'Report Ready',
+  'SamplesGenerating',
+  'SamplesGenerated',
+  'SamplesCollected',
+  'InLaboratory',
+  'ReportGenerated',
+  'ReportUploaded',
   'Cancelled',
 ]
 
-const NEXT_STATUS: Partial<Record<AppointmentStatus, AppointmentStatus>> = {
-  Pending: 'Confirmed',
-  Confirmed: 'Sample Collected',
-  'Sample Collected': 'Report Ready',
-  'Report Ready': 'Completed',
+// ─── Collect Samples modal ────────────────────────────────────────────────────
+
+function CollectSamplesModal({
+  isOpen,
+  onClose,
+  appointmentId,
+  onCollected,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  appointmentId: string
+  onCollected: () => void
+}) {
+  const [samples, setSamples] = useState<SampleRecord[]>([])
+  const [loading, setLoading] = useState(false)
+  const [collector, setCollector] = useState('')
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  async function refetch() {
+    setLoading(true)
+    try {
+      setSamples(await getAppointmentSamples(appointmentId))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen) refetch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, appointmentId])
+
+  async function handleCollect(sampleId: string) {
+    if (!collector.trim()) {
+      setError('Enter the collector\'s name first')
+      return
+    }
+    setError('')
+    setBusyId(sampleId)
+    try {
+      await collectSample(sampleId, collector.trim())
+      await refetch()
+      onCollected()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to mark sample collected')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Collect Samples">
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium text-slate-700 block mb-1">Collector Name</label>
+          <input
+            type="text"
+            value={collector}
+            onChange={(e) => setCollector(e.target.value)}
+            placeholder="Phlebotomist name"
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+        </div>
+        {error && <p className="text-red-500 text-xs">{error}</p>}
+        {loading ? (
+          <LoadingSpinner className="py-8" />
+        ) : (
+          <div className="space-y-2">
+            {samples.map((s) => (
+              <div key={s.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 capitalize">{s.sampleType} sample</p>
+                  <p className="text-xs font-mono text-slate-400">{s.barcodeId}</p>
+                </div>
+                {s.collectionStatus === 'collected' ? (
+                  <span className="text-xs font-semibold text-green-600 flex items-center gap-1">
+                    <CheckCircle className="h-3.5 w-3.5" /> Collected
+                  </span>
+                ) : s.collectionStatus === 'rejected' ? (
+                  <span className="text-xs font-semibold text-red-500">Rejected</span>
+                ) : (
+                  <Button size="sm" loading={busyId === s.id} onClick={() => handleCollect(s.id)}>
+                    Mark Collected
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <Button variant="outline" className="w-full" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+    </Modal>
+  )
 }
 
-const NEXT_STATUS_LABEL: Partial<Record<AppointmentStatus, string>> = {
-  Pending: 'Confirm',
-  Confirmed: 'Mark Collected',
-  'Sample Collected': 'Mark Report Ready',
-  'Report Ready': 'Mark Complete',
-}
-
-const NEXT_STATUS_ICON: Partial<Record<AppointmentStatus, typeof CheckCircle>> = {
-  Pending: CheckCircle,
-  Confirmed: FlaskConical,
-  'Sample Collected': UploadCloud,
-  'Report Ready': ClipboardCheck,
-}
+// ─── Appointment row ──────────────────────────────────────────────────────────
 
 function AppointmentRow({
   appt,
@@ -74,41 +165,35 @@ function AppointmentRow({
   onUpdate: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [newStatus, setNewStatus] = useState<AppointmentStatus>(appt.status)
-  const [notes, setNotes] = useState(appt.notes ?? '')
-  const [saving, setSaving] = useState(false)
   const [advancing, setAdvancing] = useState(false)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [actionError, setActionError] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [barcodeModalOpen, setBarcodeModalOpen] = useState(false)
+  const [printOpen, setPrintOpen] = useState(false)
+  const [collectOpen, setCollectOpen] = useState(false)
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [report, setReport] = useState<Report | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
 
-  const nextStatus = NEXT_STATUS[appt.status]
-  const nextLabel = NEXT_STATUS_LABEL[appt.status]
-  const NextIcon = NEXT_STATUS_ICON[appt.status]
+  const packageLabel = describePackages(appt)
+  const cost = describeCost(appt)
 
-  async function handleAdvance() {
-    if (!nextStatus) return
+  async function withAction(fn: () => Promise<void>) {
+    setActionError('')
     setAdvancing(true)
-    await updateAppointmentStatus(appt.id, nextStatus)
-    onUpdate()
-    setAdvancing(false)
-  }
-
-  async function handleSave() {
-    setSaving(true)
-    await updateAppointmentStatus(appt.id, newStatus, notes || undefined)
-    onUpdate()
-    setSaving(false)
-    setModalOpen(false)
+    try {
+      await fn()
+      onUpdate()
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Action failed')
+    } finally {
+      setAdvancing(false)
+    }
   }
 
   async function handleDelete() {
     setDeleting(true)
-    await softDeleteAppointment(appt.id)
+    await deleteAppointmentApi(appt.id)
     onUpdate()
     setDeleting(false)
     setDeleteConfirmOpen(false)
@@ -133,7 +218,7 @@ function AppointmentRow({
     const html = buildReportHtml(
       {
         patientName: appt.patientName,
-        packageName: appt.packageName,
+        packageName: packageLabel,
         date: format(new Date(appt.date), 'dd MMM yyyy'),
         testValues: report.testValues,
         summary: report.summary,
@@ -147,6 +232,73 @@ function AppointmentRow({
     printWindow.document.close()
   }
 
+  // Primary quick-action per status — mirrors the server-enforced state machine, never sets a
+  // status the backend wouldn't itself accept as the next legal hop.
+  function renderPrimaryAction() {
+    switch (appt.status) {
+      case 'Created':
+        // An appointment can land here with nothing selected yet (e.g. the walk-in wizard's
+        // schedule step created it but test selection was never finished) — confirming would
+        // just fail server-side with "select at least one package or test," so route back into
+        // the picker instead of offering a button that's guaranteed to error.
+        if (appt.packages.length === 0 && appt.manualTestIds.length === 0) {
+          return (
+            <Link to={`/admin/appointments/new/${appt.id}`}>
+              <Button size="sm" variant="outline">
+                <Plus className="h-3.5 w-3.5 mr-1" /> Select Tests
+              </Button>
+            </Link>
+          )
+        }
+        return (
+          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
+            await confirmAppointment(appt.id)
+            await generateSamples(appt.id)
+          })}>
+            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirm &amp; Generate Samples
+          </Button>
+        )
+      case 'Confirmed':
+      case 'SamplesGenerating':
+        return (
+          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
+            await generateSamples(appt.id)
+          })}>
+            <FlaskConical className="h-3.5 w-3.5 mr-1" /> Generate Samples
+          </Button>
+        )
+      case 'SamplesGenerated':
+        return (
+          <Button size="sm" onClick={() => setCollectOpen(true)}>
+            <PackageCheck className="h-3.5 w-3.5 mr-1" /> Collect Samples
+          </Button>
+        )
+      case 'SamplesCollected':
+        return (
+          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
+            await setAppointmentStatus(appt.id, 'InLaboratory')
+          })}>
+            <Truck className="h-3.5 w-3.5 mr-1" /> Send to Lab
+          </Button>
+        )
+      case 'ReportUploaded':
+        return (
+          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
+            await setAppointmentStatus(appt.id, 'Completed')
+          })}>
+            <ClipboardCheck className="h-3.5 w-3.5 mr-1" /> Mark Complete
+          </Button>
+        )
+      default:
+        return null
+    }
+  }
+
+  const canCancel = appt.status === 'Created' || appt.status === 'Confirmed' || appt.status === 'SamplesGenerated'
+  const canGenerateReport =
+    appt.status === 'SamplesCollected' || appt.status === 'InLaboratory' || appt.status === 'ReportGenerated'
+  const canViewReport = appt.status === 'ReportUploaded' || appt.status === 'Completed'
+
   return (
     <>
       <Card>
@@ -158,27 +310,18 @@ function AppointmentRow({
                 <StatusBadge status={appt.status} />
               </div>
               <p className="text-slate-500 text-sm mt-0.5">
-                {appt.packageName} · {format(new Date(appt.date), 'dd MMM yyyy')} · {appt.timeSlot}
+                {packageLabel} · {format(new Date(appt.date), 'dd MMM yyyy')} · {appt.timeSlot}
               </p>
               <p className="text-slate-400 text-xs">{appt.patientPhone}</p>
             </div>
 
             <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-              {/* Quick advance button */}
-              {nextStatus && nextLabel && NextIcon && appt.status !== 'Sample Collected' && (
-                <Button size="sm" loading={advancing} onClick={handleAdvance}>
-                  <NextIcon className="h-3.5 w-3.5 mr-1" />
-                  {nextLabel}
-                </Button>
-              )}
+              {renderPrimaryAction()}
 
-              {/* Upload report button */}
-              {(appt.status === 'Confirmed' || appt.status === 'Sample Collected') && (
+              {canGenerateReport && (
                 <>
                   <Link to={`/admin/upload-report/${appt.id}`}>
-                    <Button size="sm" variant="outline">
-                      <UploadCloud className="h-3.5 w-3.5 mr-1" /> Upload Report
-                    </Button>
+                    <Button size="sm" variant="outline">Upload Report</Button>
                   </Link>
                   <Link to={`/admin/generate-report/${appt.id}`}>
                     <Button size="sm" variant="outline">
@@ -188,22 +331,26 @@ function AppointmentRow({
                 </>
               )}
 
-              {/* View report button */}
-              {(appt.status === 'Report Ready' || appt.status === 'Completed') && (
+              {canViewReport && (
                 <Button size="sm" onClick={handleViewReport}>
                   <Eye className="h-3.5 w-3.5 mr-1" /> View Report
                 </Button>
               )}
 
-              {appt.status !== 'Deleted' && (
-                <Button size="sm" variant="outline" onClick={() => setBarcodeModalOpen(true)}>
-                  <Barcode className="h-3.5 w-3.5 mr-1" /> Barcode
+              {appt.status !== 'Created' && appt.status !== 'Deleted' && (
+                <Button size="sm" variant="outline" onClick={() => setPrintOpen(true)}>
+                  <Barcode className="h-3.5 w-3.5 mr-1" /> Barcodes
                 </Button>
               )}
 
-              {appt.status !== 'Deleted' && (
-                <Button size="sm" variant="ghost" onClick={() => setModalOpen(true)}>
-                  Edit
+              {canCancel && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-400 hover:text-red-600 hover:bg-red-50"
+                  onClick={() => withAction(async () => { await cancelAppointment(appt.id) })}
+                >
+                  Cancel
                 </Button>
               )}
 
@@ -227,24 +374,32 @@ function AppointmentRow({
             </div>
           </div>
 
+          {actionError && (
+            <p className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{actionError}</p>
+          )}
+
           {expanded && (
             <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-xs text-slate-400">Price</p>
-                <p className="font-medium">₹{appt.packagePrice}</p>
+                <p className="text-xs text-slate-400">Cost</p>
+                <p className="font-medium">₹{cost}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Booked On</p>
                 <p className="font-medium">
-                  {appt.createdAt?.toDate
-                    ? format(appt.createdAt.toDate(), 'dd MMM yyyy')
-                    : '—'}
+                  {appt.createdAt?.toDate ? format(appt.createdAt.toDate(), 'dd MMM yyyy') : '—'}
                 </p>
               </div>
               <div className="col-span-2">
                 <p className="text-xs text-slate-400">Collection Address</p>
                 <p className="font-medium">{appt.collectionAddress}</p>
               </div>
+              {appt.resolvedTests.length > 0 && (
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-400">Tests ({appt.resolvedTests.length})</p>
+                  <p className="font-medium">{appt.resolvedTests.map((t) => t.name).join(', ')}</p>
+                </div>
+              )}
               {appt.notes && (
                 <div className="col-span-2">
                   <p className="text-xs text-slate-400">Notes</p>
@@ -256,47 +411,10 @@ function AppointmentRow({
         </CardContent>
       </Card>
 
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Edit Appointment">
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium text-slate-700 block mb-1">Status</label>
-            <select
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value as AppointmentStatus)}
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              {(['Pending', 'Confirmed', 'Sample Collected', 'Report Ready', 'Completed', 'Cancelled'] as AppointmentStatus[]).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700 block mb-1">
-              Internal Notes (optional)
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Notes visible only to admin..."
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-            />
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" className="flex-1" onClick={() => setModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button className="flex-1" loading={saving} onClick={handleSave}>
-              Save Changes
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       <Modal isOpen={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} title="Delete Appointment">
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Are you sure you want to delete the appointment for <span className="font-semibold">{appt.patientName}</span> ({appt.packageName})?
+            Are you sure you want to delete the appointment for <span className="font-semibold">{appt.patientName}</span> ({packageLabel})?
           </p>
           <p className="text-xs text-slate-400">
             This is a soft delete — the appointment will move to the Deleted tab and can still be viewed.
@@ -312,18 +430,16 @@ function AppointmentRow({
         </div>
       </Modal>
 
-      <BarcodePrintModal
-        isOpen={barcodeModalOpen}
-        onClose={() => setBarcodeModalOpen(false)}
-        appointment={appt}
+      <SamplePrintModal isOpen={printOpen} onClose={() => setPrintOpen(false)} appointmentId={appt.id} />
+
+      <CollectSamplesModal
+        isOpen={collectOpen}
+        onClose={() => setCollectOpen(false)}
+        appointmentId={appt.id}
+        onCollected={onUpdate}
       />
 
-      <Modal
-        isOpen={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        title="Report"
-        size="xl"
-      >
+      <Modal isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} title="Report" size="xl">
         {reportLoading ? (
           <LoadingSpinner className="py-12" />
         ) : !report ? (
@@ -473,9 +589,16 @@ export default function AdminAppointmentsPage() {
 
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-extrabold text-slate-900">Appointments</h1>
-          <Button variant="ghost" size="sm" onClick={refetch}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Link to="/admin/appointments/new">
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-1" /> New Walk-In
+              </Button>
+            </Link>
+            <Button variant="ghost" size="sm" onClick={refetch}>
+              <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Main tabs */}

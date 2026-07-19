@@ -159,6 +159,19 @@ export async function updatePatient(
   })
 }
 
+export interface DeletePatientResult {
+  success: boolean
+  deletedAppointments: number
+  deletedSamples: number
+  deletedReports: number
+}
+
+/** Admin: permanently deletes a patient's login account and every appointment/sample/report
+ * tied to them. Irreversible — if this person walks in again, they're a brand-new patient. */
+export async function deletePatient(uid: string): Promise<DeletePatientResult> {
+  return apiFetch(`/admin/patients/${encodeURIComponent(uid)}`, { method: 'DELETE' })
+}
+
 // ─── Admin: Tests API ─────────────────────────────────────────────────────────
 
 export interface TestParameter {
@@ -210,6 +223,276 @@ export async function updateTest(
 export async function deleteTest(testId: string): Promise<{ success: boolean }> {
   return apiFetch(`/admin/tests/${encodeURIComponent(testId)}`, {
     method: 'DELETE',
+  })
+}
+
+// ─── Admin: Invoices API ──────────────────────────────────────────────────────
+
+export interface CreateInvoiceLineItem {
+  itemName: string
+  hsnSac?: string
+  quantity: number
+  pricePerUnit: number
+  discountPercent: number
+}
+
+export interface CreateInvoiceRequest {
+  date: string
+  billToName: string
+  billToContact?: string
+  lineItems: CreateInvoiceLineItem[]
+  receivedAmount: number
+  appointmentId?: string
+  patientId?: string
+}
+
+export interface InvoiceRecord extends CreateInvoiceRequest {
+  id: string
+  invoiceNumber: number
+}
+
+/** Admin: create an invoice linked to an appointment/patient — validated server-side, unlike
+ * the pre-existing client-side `createInvoice` (src/lib/firestore.ts), which stays as-is for
+ * standalone (non-appointment-linked) invoices. */
+export async function createAppointmentInvoice(payload: CreateInvoiceRequest): Promise<InvoiceRecord> {
+  return apiFetch('/admin/invoices', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+// ─── Appointments API (shared by patient portal and admin walk-in flow) ───────
+
+export type ApiAppointmentStatus =
+  | 'Created'
+  | 'Confirmed'
+  | 'SamplesGenerating'
+  | 'SamplesGenerated'
+  | 'SamplesCollected'
+  | 'InLaboratory'
+  | 'ReportGenerated'
+  | 'ReportUploaded'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Deleted'
+
+export interface AppointmentPackageEntry {
+  packageId: string
+  packageName: string
+  priceAtBooking: number
+}
+
+export interface ResolvedTestRecord {
+  testId: string
+  name: string
+  sampleType: string
+  cost: number
+  origin: 'package' | 'manual'
+  sourcePackageId?: string
+}
+
+export interface AppointmentRecord {
+  id: string
+  patientId: string
+  patientName: string
+  patientPhone: string
+  packages: AppointmentPackageEntry[]
+  manualTestIds: string[]
+  resolvedTests: ResolvedTestRecord[]
+  sampleIds: string[]
+  totalCost: number
+  invoiceId?: string
+  date: string
+  timeSlot: string
+  collectionAddress: string
+  status: ApiAppointmentStatus
+  notes?: string
+}
+
+export interface AppointmentSummary {
+  packages: AppointmentPackageEntry[]
+  manualTestIds: string[]
+  resolvedTests: ResolvedTestRecord[]
+  totalTests: number
+  totalSamples: number
+  /** Sum of resolvedTests[].cost, ignoring any override — what the cost WOULD be by default. */
+  computedCost: number
+  /** Admin-set override, or null if none is set. */
+  costOverride: number | null
+  /** costOverride ?? computedCost — what the UI should actually display/charge. */
+  estimatedCost: number
+}
+
+export interface CreateAppointmentRequest {
+  patientId: string
+  date: string
+  timeSlot: string
+  collectionAddress: string
+  notes?: string
+}
+
+export async function createAppointmentApi(payload: CreateAppointmentRequest): Promise<AppointmentRecord> {
+  return apiFetch('/appointments', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function getAppointmentApi(id: string): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}`)
+}
+
+export async function updateAppointmentApi(
+  id: string,
+  payload: Partial<Pick<CreateAppointmentRequest, 'date' | 'timeSlot' | 'collectionAddress' | 'notes'>>,
+): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function addPackagesToAppointment(id: string, packageIds: string[]): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/packages`, {
+    method: 'POST',
+    body: JSON.stringify({ packageIds }),
+  })
+}
+
+export async function removePackageFromAppointment(id: string, packageId: string): Promise<AppointmentRecord> {
+  return apiFetch(
+    `/appointments/${encodeURIComponent(id)}/packages/${encodeURIComponent(packageId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function addTestsToAppointment(id: string, testIds: string[]): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/tests`, {
+    method: 'POST',
+    body: JSON.stringify({ testIds }),
+  })
+}
+
+export async function removeTestFromAppointment(id: string, testId: string): Promise<AppointmentRecord> {
+  return apiFetch(
+    `/appointments/${encodeURIComponent(id)}/tests/${encodeURIComponent(testId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function getAppointmentSummary(id: string): Promise<AppointmentSummary> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/summary`)
+}
+
+/** Admin-only, pre-confirm: override the estimated/final cost, or pass `null` to clear back to
+ * the computed sum of resolvedTest costs. */
+export async function setAppointmentCostOverride(
+  id: string,
+  amount: number | null,
+): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/cost-override`, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  })
+}
+
+export async function confirmAppointment(id: string): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/confirm`, { method: 'POST' })
+}
+
+export async function generateSamples(id: string): Promise<{ sampleIds: string[] }> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/generate-samples`, { method: 'POST' })
+}
+
+export async function getAppointmentSamples(id: string): Promise<SampleRecord[]> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/samples`)
+}
+
+export async function cancelAppointment(id: string): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/cancel`, { method: 'POST' })
+}
+
+/** Admin-only generic transition for the tail of the pipeline (lab intake / report progress /
+ * completion) — the backend rejects any target outside that whitelist, since sample generation
+ * and cancellation carry business logic that must go through their own dedicated endpoints. */
+export async function setAppointmentStatus(
+  id: string,
+  status: 'InLaboratory' | 'ReportGenerated' | 'ReportUploaded' | 'Completed',
+): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  })
+}
+
+export async function deleteAppointmentApi(id: string): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/delete`, { method: 'POST' })
+}
+
+/** Walks the appointment from wherever it currently is (SamplesCollected or later) up through
+ * the report-progress chain to ReportUploaded, one legal hop at a time — the state machine
+ * doesn't allow skipping straight from e.g. SamplesCollected to ReportUploaded in one call. */
+const REPORT_CHAIN: ApiAppointmentStatus[] = [
+  'SamplesCollected',
+  'InLaboratory',
+  'ReportGenerated',
+  'ReportUploaded',
+]
+
+export async function markReportUploaded(id: string, currentStatus: ApiAppointmentStatus): Promise<void> {
+  const startIdx = Math.max(REPORT_CHAIN.indexOf(currentStatus), 0)
+  for (let i = startIdx + 1; i < REPORT_CHAIN.length; i++) {
+    await setAppointmentStatus(id, REPORT_CHAIN[i] as 'InLaboratory' | 'ReportGenerated' | 'ReportUploaded')
+  }
+}
+
+// ─── Samples API ───────────────────────────────────────────────────────────────
+
+export interface SampleRecord {
+  id: string
+  appointmentId: string
+  patientId: string
+  sampleType: string
+  testIds: string[]
+  barcodeId: string
+  collectionStatus: 'pending' | 'collected' | 'rejected'
+  collector?: string
+  remarks?: string
+}
+
+export interface SamplePrintPayload {
+  sampleId: string
+  barcodeId: string
+  sampleType: string
+  patientName: string
+  date: string
+  timeSlot: string
+  testNames: string[]
+}
+
+export async function getSampleApi(id: string): Promise<SampleRecord> {
+  return apiFetch(`/samples/${encodeURIComponent(id)}`)
+}
+
+export async function collectSample(
+  id: string,
+  collector: string,
+  remarks?: string,
+): Promise<SampleRecord> {
+  return apiFetch(`/samples/${encodeURIComponent(id)}/collect`, {
+    method: 'POST',
+    body: JSON.stringify({ collector, remarks }),
+  })
+}
+
+export async function printSample(id: string): Promise<SamplePrintPayload> {
+  return apiFetch(`/samples/${encodeURIComponent(id)}/print`, { method: 'POST' })
+}
+
+export async function rejectSample(
+  id: string,
+  remarks: string,
+): Promise<{ rejectedSampleId: string; replacementSampleId: string }> {
+  return apiFetch(`/samples/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ remarks }),
   })
 }
 

@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import * as admin from 'firebase-admin'
 import { verifyAuth, AuthRequest } from '../middleware/verifyAuth'
 import { requireAdmin } from '../middleware/requireAdmin'
+import { asyncHandler } from '../middleware/asyncHandler'
 
 const router = Router()
 
@@ -208,6 +209,100 @@ router.patch(
       res.status(500).json({ error: 'Failed to update patient' })
     }
   },
+)
+
+/** Deletes Firestore docs in chunks of ≤500 (Firestore's per-batch write limit). */
+async function batchDelete(refs: FirebaseFirestore.DocumentReference[]): Promise<void> {
+  const db = admin.firestore()
+  for (let i = 0; i < refs.length; i += 500) {
+    const batch = db.batch()
+    refs.slice(i, i + 500).forEach((ref) => batch.delete(ref))
+    await batch.commit()
+  }
+}
+
+// ─── DELETE /api/admin/patients/:uid ──────────────────────────────────────────
+// Admin only: permanently deletes a patient — the Firebase Auth account (so the phone/email
+// can never sign back into this same identity), the Firestore profile, and every appointment,
+// sample, and report tied to them. This is a genuine wipe, not a soft-delete: if the same
+// person walks in again, they are registered as an entirely new patient with no history.
+// Invoices are intentionally NOT deleted — they're financial/GST records that must survive
+// independent of whether the underlying patient account still exists.
+router.delete(
+  '/:uid',
+  verifyAuth,
+  requireAdmin,
+  asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+    const { uid } = req.params
+    if (!uid || !/^[\w-]{1,128}$/.test(uid)) {
+      res.status(400).json({ error: 'Invalid uid' })
+      return
+    }
+
+    const db = admin.firestore()
+    const userRef = db.doc(`users/${uid}`)
+    const userSnap = await userRef.get()
+    if (!userSnap.exists) {
+      res.status(404).json({ error: 'Patient not found' })
+      return
+    }
+    if (userSnap.data()?.role !== 'patient') {
+      res.status(400).json({ error: 'This endpoint only deletes patient accounts' })
+      return
+    }
+
+    const apptSnap = await db.collection('appointments').where('patientId', '==', uid).get()
+    const appointmentIds = apptSnap.docs.map((d) => d.id)
+
+    const [sampleRefs, reportRefs] = await Promise.all([
+      appointmentIds.length > 0
+        ? Promise.all(
+            appointmentIds.map((id) => db.collection('samples').where('appointmentId', '==', id).get()),
+          ).then((snaps) => snaps.flatMap((s) => s.docs.map((d) => d.ref)))
+        : Promise.resolve([]),
+      appointmentIds.length > 0
+        ? Promise.all(
+            appointmentIds.map((id) => db.collection('reports').where('appointmentId', '==', id).get()),
+          ).then((snaps) => snaps.flatMap((s) => s.docs.map((d) => d.ref)))
+        : Promise.resolve([]),
+    ])
+
+    await batchDelete([...sampleRefs, ...reportRefs, ...apptSnap.docs.map((d) => d.ref)])
+
+    // Best-effort: uploaded report PDFs live in Cloud Storage under reports/{appointmentId}/,
+    // not in Firestore — clean those up too, but don't fail the whole deletion over it.
+    try {
+      const bucket = admin.storage().bucket()
+      await Promise.all(
+        appointmentIds.map((id) => bucket.deleteFiles({ prefix: `reports/${id}/` }).catch(() => {})),
+      )
+    } catch (err) {
+      console.error(`[DELETE /api/admin/patients/${uid}] Storage cleanup failed (non-fatal)`, err)
+    }
+
+    await userRef.delete()
+
+    try {
+      await admin.auth().deleteUser(uid)
+    } catch (err) {
+      // If the Auth user is already gone (e.g. a retry after a partial prior failure), that's
+      // fine — the account no longer being able to sign in is the actual goal, and it can't.
+      if ((err as { code?: string }).code !== 'auth/user-not-found') {
+        console.error(`[DELETE /api/admin/patients/${uid}] Auth user deletion failed`, err)
+        res.status(500).json({
+          error: 'Patient data was deleted, but removing the login account failed — they may still be able to sign in. Retry this delete.',
+        })
+        return
+      }
+    }
+
+    res.json({
+      success: true,
+      deletedAppointments: appointmentIds.length,
+      deletedSamples: sampleRefs.length,
+      deletedReports: reportRefs.length,
+    })
+  }),
 )
 
 export default router

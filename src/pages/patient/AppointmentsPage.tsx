@@ -9,16 +9,17 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { StatusProgress } from '../../components/ui/StatusProgress'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePatientAppointments } from '../../hooks/useAppointments'
-import { updateAppointmentStatus } from '../../lib/firestore'
+import { cancelAppointment } from '../../lib/api'
+import { describePackages, describeCost } from '../../lib/appointmentDisplay'
 import type { Appointment, AppointmentStatus } from '../../types'
 import { format } from 'date-fns'
 
 const FILTER_TABS: (AppointmentStatus | 'All')[] = [
   'All',
-  'Pending',
+  'Created',
   'Confirmed',
-  'Sample Collected',
-  'Report Ready',
+  'SamplesCollected',
+  'ReportUploaded',
   'Completed',
   'Cancelled',
 ]
@@ -35,9 +36,12 @@ function AppointmentCard({
 
   async function handleCancel() {
     setCancelling(true)
-    await updateAppointmentStatus(appt.id, 'Cancelled')
-    onCancel(appt.id)
-    setCancelling(false)
+    try {
+      await cancelAppointment(appt.id)
+      onCancel(appt.id)
+    } finally {
+      setCancelling(false)
+    }
   }
 
   return (
@@ -46,7 +50,7 @@ function AppointmentCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-slate-900">{appt.packageName}</h3>
+              <h3 className="font-semibold text-slate-900">{describePackages(appt)}</h3>
               <StatusBadge status={appt.status} />
             </div>
             <p className="text-slate-500 text-sm mt-1">
@@ -66,8 +70,8 @@ function AppointmentCard({
           <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-sm">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-xs text-slate-400">Package Price</p>
-                <p className="font-medium">₹{appt.packagePrice}</p>
+                <p className="text-xs text-slate-400">Cost</p>
+                <p className="font-medium">₹{describeCost(appt)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Booked On</p>
@@ -88,7 +92,7 @@ function AppointmentCard({
                 <p className="font-medium">{appt.notes}</p>
               </div>
             )}
-            {appt.status === 'Pending' && (
+            {(appt.status === 'Created' || appt.status === 'Confirmed') && (
               <Button
                 variant="danger"
                 size="sm"
