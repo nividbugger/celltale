@@ -172,6 +172,45 @@ export async function deletePatient(uid: string): Promise<DeletePatientResult> {
   return apiFetch(`/admin/patients/${encodeURIComponent(uid)}`, { method: 'DELETE' })
 }
 
+// ─── Admin: Parameters API ───────────────────────────────────────────────────
+
+export interface DiagnosticParameterInput {
+  code: string
+  analyzer: string
+  loinc?: string | null
+  name: string
+  discipline: string
+  tubeColor: string
+  additive?: string
+  unit: string
+  refLow?: number | null
+  refHigh?: number | null
+  sex: 'ALL' | 'M' | 'F'
+  refText?: string | null
+}
+
+export interface DiagnosticParameterRecord extends DiagnosticParameterInput {
+  id: string
+}
+
+export async function createParameter(payload: DiagnosticParameterInput): Promise<DiagnosticParameterRecord> {
+  return apiFetch('/admin/parameters', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateParameter(
+  id: string,
+  payload: DiagnosticParameterInput,
+): Promise<DiagnosticParameterRecord> {
+  return apiFetch(`/admin/parameters/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteParameter(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/admin/parameters/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 // ─── Admin: Tests API ─────────────────────────────────────────────────────────
 
 export interface TestParameter {

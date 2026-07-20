@@ -20,14 +20,50 @@ export interface User {
   createdAt: Timestamp
 }
 
+// ─── Diagnostic Parameters ────────────────────────────────────────────────
+
+export interface DiagnosticParameter {
+  id: string
+  code: string
+  analyzer: string
+  loinc: string | null
+  name: string
+  discipline: string
+  tubeColor: string
+  additive: string
+  unit: string
+  refLow: number | null
+  refHigh: number | null
+  sex: 'ALL' | 'M' | 'F'
+  refText: string | null
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export function formatParameterRefRange(
+  p: Pick<DiagnosticParameter, 'refLow' | 'refHigh' | 'refText' | 'sex'>,
+): string {
+  if (p.refText) return p.refText
+  const lo = p.refLow !== null ? p.refLow : undefined
+  const hi = p.refHigh !== null ? p.refHigh : undefined
+  let range = ''
+  if (lo !== undefined && hi !== undefined) range = `${lo}–${hi}`
+  else if (lo !== undefined) range = `> ${lo}`
+  else if (hi !== undefined) range = `< ${hi}`
+  return p.sex !== 'ALL' ? `${range} (${p.sex})` : range
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────
 
 export type SampleType = 'blood' | 'urine' | 'stool' | 'swab' | 'other'
 
 export interface TestParameter {
+  parameterId?: string
   parameter: string
+  machineCode?: string
   unit: string
   biologicalReference: string
+  tubeColor?: string
 }
 
 export interface Test {

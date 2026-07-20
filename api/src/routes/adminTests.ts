@@ -7,9 +7,12 @@ import { requireAdmin } from '../middleware/requireAdmin'
 const router = Router()
 
 interface TestParameter {
+  parameterId?: string
   parameter: string
+  machineCode?: string
   unit: string
   biologicalReference: string
+  tubeColor?: string
 }
 
 const VALID_TUBE_COLORS = ['Red', 'Lavender', 'Grey', 'Black', 'Blue', 'Green', 'Yellow'] as const
@@ -83,6 +86,7 @@ function parseTestInput(body: unknown): { data: TestInput } | { error: string } 
       name: name.trim(),
       parameters: parameters.map((p: any) => ({
         parameter: p.parameter.trim(),
+        ...(p.machineCode?.trim() ? { machineCode: p.machineCode.trim() } : {}),
         unit: p.unit.trim(),
         biologicalReference: p.biologicalReference.trim(),
       })),
@@ -111,9 +115,12 @@ router.post('/', verifyAuth, requireAdmin, async (req: AuthRequest, res) => {
       testId,
       name: parsed.data.name,
       parameters: parsed.data.parameters.map((p: any) => ({
+        ...(p.parameterId ? { parameterId: p.parameterId } : {}),
         parameter: p.parameter || '',
+        ...(p.machineCode ? { machineCode: p.machineCode } : {}),
         unit: p.unit || '',
         biologicalReference: p.biologicalReference || '',
+        ...(p.tubeColor ? { tubeColor: p.tubeColor } : {}),
       })),
       ...(parsed.data.cost !== undefined ? { cost: parsed.data.cost } : {}),
       ...(parsed.data.tubeColor !== undefined ? { tubeColor: parsed.data.tubeColor } : {}),
@@ -150,9 +157,12 @@ router.patch('/:testId', verifyAuth, requireAdmin, async (req: AuthRequest, res)
     const updateData = {
       name: parsed.data.name,
       parameters: parsed.data.parameters.map((p: any) => ({
+        ...(p.parameterId ? { parameterId: p.parameterId } : {}),
         parameter: p.parameter || '',
+        ...(p.machineCode ? { machineCode: p.machineCode } : {}),
         unit: p.unit || '',
         biologicalReference: p.biologicalReference || '',
+        ...(p.tubeColor ? { tubeColor: p.tubeColor } : {}),
       })),
       cost: parsed.data.cost !== undefined ? parsed.data.cost : FieldValue.delete(),
       tubeColor: parsed.data.tubeColor !== undefined ? parsed.data.tubeColor : FieldValue.delete(),

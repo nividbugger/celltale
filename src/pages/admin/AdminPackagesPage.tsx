@@ -158,7 +158,7 @@ function PackageForm({
 
   // ─── Tube-colour state ─────────────────────────────────────────────────
   const [customMode, setCustomMode] = useState<boolean>(
-    Boolean(pkg?.sampleGroups && pkg.sampleGroups.length > 0),
+    !pkg || Boolean(pkg?.sampleGroups && pkg.sampleGroups.length > 0),
   )
   const [testColorMap, setTestColorMap] = useState<Record<string, string>>(() =>
     initColorMap(pkg?.sampleGroups),
@@ -202,7 +202,7 @@ function PackageForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedTestIds.join(',')])
 
-  // When tests are removed, drop them from the colour map.
+  // Sync colour map with selected tests: drop removed tests, pre-populate newly added ones.
   useEffect(() => {
     if (!customMode) return
     setTestColorMap((prev) => {
@@ -210,6 +210,11 @@ function PackageForm({
       const next = { ...prev }
       for (const id of Object.keys(next)) {
         if (!selected.has(id)) delete next[id]
+      }
+      for (const testId of watchedTestIds) {
+        if (next[testId]) continue
+        const tc = allTests.find((t) => t.id === testId)?.tubeColor
+        if (tc) next[testId] = tc
       }
       return next
     })
@@ -681,6 +686,7 @@ export default function AdminPackagesPage() {
               <span className="text-teal-600 font-semibold">Packages</span>
               <a href="/admin/invoices" className="hover:text-slate-900">Invoices</a>
               <a href="/admin/tests" className="hover:text-slate-900">Tests</a>
+              <a href="/admin/parameters" className="hover:text-slate-900">Parameters</a>
             </nav>
           </div>
           <button

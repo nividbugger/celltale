@@ -1,18 +1,26 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { CheckCircle, Clock, Award, ArrowRight, Star, FlaskConical, ChevronDown, ChevronUp, Stethoscope } from 'lucide-react'
+import { CheckCircle, Clock, Award, ArrowRight, Star, FlaskConical, Stethoscope } from 'lucide-react'
 import { Navbar } from '../../components/layout/Navbar'
 import { Footer } from '../../components/layout/Footer'
 import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { usePackages } from '../../hooks/usePackages'
 import { useAuth } from '../../contexts/AuthContext'
+import { getActiveTests } from '../../lib/firestore'
+import type { Test } from '../../types'
 
 export default function LandingPage() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
-  const [expandedPkg, setExpandedPkg] = useState<string | null>(null)
   const { packages, loading: pkgsLoading } = usePackages()
+  const [testMap, setTestMap] = useState<Record<string, Test>>({})
+
+  useEffect(() => {
+    getActiveTests().then((tests) =>
+      setTestMap(Object.fromEntries(tests.map((t) => [t.id, t])))
+    )
+  }, [])
 
   function handleBookNow() {
     navigate(currentUser ? '/dashboard/book' : '/register')
@@ -107,8 +115,8 @@ export default function LandingPage() {
             ) : packages.length === 0 ? (
               <div className="col-span-3 text-center py-12 text-slate-500">No packages available at this time.</div>
             ) : packages.map((pkg) => {
-              const isExpanded = expandedPkg === pkg.id
-              return (
+                const resolvedTests = pkg.testIds.map((id) => testMap[id]).filter(Boolean)
+                return (
                 <div
                   key={pkg.id}
                   className={`relative rounded-3xl border shadow-sm flex flex-col ${pkg.color} ${
@@ -156,31 +164,30 @@ export default function LandingPage() {
                         </li>
                       ))}
                     </ul>
-
-                    {/* Expand/collapse details */}
-                    <button
-                      onClick={() => setExpandedPkg(isExpanded ? null : pkg.id)}
-                      className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
-                    >
-                      {isExpanded ? (
-                        <><ChevronUp className="h-3.5 w-3.5" /> Hide full details</>
-                      ) : (
-                        <><ChevronDown className="h-3.5 w-3.5" /> View full test details</>
-                      )}
-                    </button>
                   </div>
 
-                  {/* Expanded details */}
-                  {isExpanded && (
-                    <div className="px-6 pb-4 border-t border-slate-100 pt-4 space-y-2">
-                      {pkg.details.map((d) => (
+                  {/* Test details — always visible */}
+                  <div className="px-6 pb-4 border-t border-slate-100 pt-4 space-y-3">
+                    {resolvedTests.length > 0 ? (
+                      resolvedTests.map((test) => (
+                        <div key={test.id}>
+                          <p className="text-xs font-semibold text-slate-700">{test.name}</p>
+                          {test.parameters.length > 0 && (
+                            <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                              {test.parameters.map((p) => p.parameter).join(' · ')}
+                            </p>
+                          )}
+                        </div>
+                      ))
+                    ) : pkg.details.length > 0 ? (
+                      pkg.details.map((d) => (
                         <div key={d.category}>
                           <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">{d.category}</p>
                           <p className="text-xs text-slate-600 leading-relaxed">{d.text}</p>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      ))
+                    ) : null}
+                  </div>
 
                   {/* CTA */}
                   <div className="p-6 pt-3 mt-auto">
