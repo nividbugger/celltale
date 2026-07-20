@@ -5,4 +5,5 @@ public sealed record Result(
     string? Value,
     string? Unit,
     ResultFlag Flag,
-    DateTimeOffset CompletedAt);
+    DateTimeOffset CompletedAt,
+    string? ReferenceRange = null);

@@ -139,9 +139,17 @@ router.post('/results', requireLisKey, async (req: Request, res: Response): Prom
       return
     }
     const sample = sampleSnap.data() as SampleDoc
+    console.log(`[lis/results] sample=${sampleId} appointmentId=${sample.appointmentId} patientId=${sample.patientId} testIds=${JSON.stringify(sample.testIds)}`)
 
-    // 2. Build machineCode → TestDoc map for this sample's tests
-    const testByMachineCode = new Map<string, TestDoc>()
+    // 2. Build lookup maps for matching machine result codes to test documents.
+    //    Primary:   param.machineCode → {test, param}   (exact per-parameter code, e.g. "WBC" → CBC param)
+    //    Secondary: test.machineCode  → TestDoc          (whole-test fallback for single-param tests)
+    //    Tertiary:  parameter.parameter (lowercased) → {test, param}  (name-based last-resort)
+    interface ParamEntry { test: TestDoc; param: { parameter: string; unit: string; biologicalReference: string; machineCode?: string } }
+    const paramByMachineCode = new Map<string, ParamEntry>()
+    const testByMachineCode  = new Map<string, TestDoc>()
+    const testByParamName    = new Map<string, ParamEntry>()
+
     if (sample.testIds.length > 0) {
       const refs = sample.testIds.map(id => db.doc(`tests/${id}`))
       const testSnaps = await db.getAll(...refs)
@@ -149,27 +157,53 @@ router.post('/results', requireLisKey, async (req: Request, res: Response): Prom
         if (!d.exists) continue
         const t = d.data() as TestDoc
         if (t.machineCode) testByMachineCode.set(t.machineCode, t)
+        for (const p of t.parameters ?? []) {
+          if (p.machineCode) paramByMachineCode.set(p.machineCode, { test: t, param: p })
+          if (p.parameter)   testByParamName.set(p.parameter.toLowerCase(), { test: t, param: p })
+        }
       }
     }
+    console.log(`[lis/results] paramMachineCode keys: ${paramByMachineCode.size}, testMachineCode keys: ${testByMachineCode.size}, paramName keys: ${testByParamName.size}`)
 
     // 3. Map LIS results → TestValue objects (skip any with no machineCode match)
     interface LisResult { testCode: string; value?: string | null; unit?: string; flag?: string; referenceRange?: string | null }
     interface TestValue { category: string; name: string; value: string; unit: string; normalRange: string; isAbnormal: boolean }
 
+    const incomingCodes = (results as LisResult[]).map(r => r.testCode)
+    console.log(`[lis/results] incoming testCodes (${incomingCodes.length}): ${incomingCodes.slice(0, 10).join(', ')}${incomingCodes.length > 10 ? '…' : ''}`)
+
     const incoming: TestValue[] = []
     for (const r of results as LisResult[]) {
-      const test = testByMachineCode.get(r.testCode)
+      let test: TestDoc | undefined
+      let matchedParam: { parameter: string; unit: string; biologicalReference: string; machineCode?: string } | undefined
+
+      // 1. Primary: param.machineCode match (e.g. "WBC" → CBC panel's WBC parameter)
+      const paramEntry = paramByMachineCode.get(r.testCode)
+      if (paramEntry) {
+        test = paramEntry.test; matchedParam = paramEntry.param
+      } else {
+        // 2. Secondary: whole-test machineCode (single-param tests where test code == machine code)
+        const testDirect = testByMachineCode.get(r.testCode)
+        if (testDirect) {
+          test = testDirect; matchedParam = testDirect.parameters?.[0]
+        } else {
+          // 3. Tertiary: match by parameter name as last resort
+          const nameEntry = testByParamName.get(r.testCode.toLowerCase())
+          if (nameEntry) { test = nameEntry.test; matchedParam = nameEntry.param }
+        }
+      }
+
       if (!test) continue
-      const firstParam = test.parameters?.[0]
       incoming.push({
         category:    test.category ?? '',
-        name:        test.name,
+        name:        matchedParam?.parameter ?? r.testCode,
         value:       r.value ?? '',
-        unit:        r.unit || firstParam?.unit || '',
-        normalRange: r.referenceRange || firstParam?.biologicalReference || '',
+        unit:        r.unit || matchedParam?.unit || '',
+        normalRange: r.referenceRange || matchedParam?.biologicalReference || '',
         isAbnormal:  r.flag !== 'Normal',
       })
     }
+    console.log(`[lis/results] matched ${incoming.length}/${incomingCodes.length} results`)
 
     // 4. Find or create the single report for this appointment, merging partial results
     const now = admin.firestore.Timestamp.now()
@@ -187,22 +221,28 @@ router.post('/results', requireLisKey, async (req: Request, res: Response): Prom
         uploadedAt:    now,
         testValues:    incoming,
       })
+      console.log(`[lis/results] created report ${reportRef.id} for appointment ${sample.appointmentId} with ${incoming.length} values`)
     } else {
       const reportDoc = reportQuery.docs[0]
       const existing = (reportDoc.data().testValues ?? []) as TestValue[]
-      // Upsert by test name: incoming values overwrite existing ones for the same test
       const byName = new Map(existing.map(tv => [tv.name, tv]))
       for (const tv of incoming) byName.set(tv.name, tv)
       await reportDoc.ref.update({ testValues: [...byName.values()] })
+      console.log(`[lis/results] updated report ${reportDoc.id} for appointment ${sample.appointmentId}: ${existing.length} existing + ${incoming.length} incoming = ${byName.size} total`)
     }
 
     // 5. Advance appointment status on first results arrival
     const apptSnap = await db.doc(`appointments/${sample.appointmentId}`).get()
     if (apptSnap.exists) {
       const status = apptSnap.data()!.status as string
-      if (status === 'SamplesCollected' || status === 'InLaboratory') {
+      if (['SamplesGenerated', 'SamplesCollected', 'InLaboratory'].includes(status)) {
         await apptSnap.ref.update({ status: 'ReportGenerated', updatedAt: now })
+        console.log(`[lis/results] appointment ${sample.appointmentId} status → ReportGenerated`)
+      } else {
+        console.log(`[lis/results] appointment ${sample.appointmentId} status=${status} (no update needed)`)
       }
+    } else {
+      console.log(`[lis/results] appointment ${sample.appointmentId} not found`)
     }
 
     res.status(200).json({ ok: true })

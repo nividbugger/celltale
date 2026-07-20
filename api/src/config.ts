@@ -32,7 +32,7 @@ export const config = {
    * domain off this list for anyone who deployed with a differing value set.
    */
   /** Shared secret for LIS middleware server-to-server auth (Bearer token) */
-  lisApiKey: process.env.LIS_API_KEY ?? '',
+  lisApiKey: (process.env.LIS_API_KEY ?? '').trim(),
   allowedOrigins: [
     'https://celltalediagnostics.com',
     'https://www.celltalediagnostics.com',

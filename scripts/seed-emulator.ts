@@ -39,7 +39,7 @@ const TEST_IDS = {
   urine: 'test-urine',
 }
 
-const PKG_IDS = { basic: 'pkg-basic', economy: 'pkg-economy', advanced: 'pkg-advanced' }
+const PKG_IDS = { basic: 'basic', economy: 'economy', advanced: 'advanced' }
 
 const PATIENT_IDS = {
   ravi:   'patient-001',

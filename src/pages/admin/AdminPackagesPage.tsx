@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import {
-  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save, RotateCcw
+  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save,
 } from 'lucide-react'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
@@ -13,7 +13,6 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllPackages, savePackage, deletePackage, reorderPackages, getActiveTests } from '../../lib/firestore'
 import { TestPicker } from '../../components/admin/TestPicker'
-import { PACKAGES as STATIC_PACKAGES } from '../../types'
 import type { Package, PackageDetail, PackageSampleGroup, Test } from '../../types'
 import { TUBE_COLORS, PRIMARY_TUBE_COLORS, EXTRA_TUBE_COLORS } from '../../lib/tubeColors'
 
@@ -610,8 +609,6 @@ export default function AdminPackagesPage() {
   const [allTests, setAllTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [seeding, setSeeding] = useState(false)
-  const [seedError, setSeedError] = useState<string | null>(null)
   const [editPkg, setEditPkg] = useState<Package | 'new' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Package | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -636,22 +633,6 @@ export default function AdminPackagesPage() {
   async function handleLogout() {
     await logOut()
     navigate('/')
-  }
-
-  async function handleSeed() {
-    setSeeding(true)
-    setSeedError(null)
-    try {
-      for (const p of STATIC_PACKAGES) {
-        await savePackage(p)
-      }
-      await load()
-    } catch (err: any) {
-      console.error('Seed failed:', err)
-      setSeedError(err?.message ?? 'Seed failed. Check Firestore rules and console.')
-    } finally {
-      setSeeding(false)
-    }
   }
 
   async function handleDelete() {
@@ -723,11 +704,6 @@ export default function AdminPackagesPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            {packages.length === 0 && !loading && (
-              <Button variant="outline" size="sm" loading={seeding} onClick={handleSeed}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Seed Defaults
-              </Button>
-            )}
             <Button size="sm" onClick={() => setEditPkg('new')}>
               <Plus className="h-4 w-4 mr-1" /> Add Package
             </Button>
@@ -740,11 +716,6 @@ export default function AdminPackagesPage() {
             <strong>Load error:</strong> {loadError}
           </div>
         )}
-        {seedError && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            <strong>Seed error:</strong> {seedError}
-          </div>
-        )}
 
         {/* Package list */}
         {loading ? (
@@ -755,10 +726,10 @@ export default function AdminPackagesPage() {
               <PackageOpen className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 font-medium">No packages configured yet</p>
               <p className="text-slate-400 text-sm mt-1 mb-4">
-                Click "Seed Defaults" to load the pre-built packages, or add one manually.
+                Add your first package to make it available for booking.
               </p>
-              <Button size="sm" loading={seeding} onClick={handleSeed}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Seed Defaults
+              <Button size="sm" onClick={() => setEditPkg('new')}>
+                <Plus className="h-4 w-4 mr-1" /> Add Package
               </Button>
             </CardContent>
           </Card>

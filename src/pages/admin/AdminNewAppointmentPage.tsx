@@ -225,7 +225,7 @@ function TubePreview({ previews }: { previews: import('../../lib/api').SamplePre
         Sample Collection &mdash; {previews.length} tube{previews.length !== 1 ? 's' : ''}, {previews.length} barcode{previews.length !== 1 ? 's' : ''} to print
       </p>
       {previews.map((preview, i) => {
-        const color = TUBE_COLORS[i % TUBE_COLORS.length]
+        const color = TUBE_COLORS.find((c) => c.name === preview.tubeColorName) ?? TUBE_COLORS[i % TUBE_COLORS.length]
         const sampleTypeLabel = preview.sampleType.charAt(0).toUpperCase() + preview.sampleType.slice(1)
         return (
           <div key={i} className="flex items-start gap-2.5 rounded-lg bg-white border border-slate-200 px-3 py-2.5">
@@ -252,9 +252,11 @@ function TubePreview({ previews }: { previews: import('../../lib/api').SamplePre
 
 function TestSelectionStep({
   appointmentId,
+  isReconfirm,
   onConfirmed,
 }: {
   appointmentId: string
+  isReconfirm: boolean
   onConfirmed: (sampleIds: string[]) => void
 }) {
   const { packages } = usePackages()
@@ -634,7 +636,7 @@ function TestSelectionStep({
         disabled={summary.resolvedTests.length === 0}
         onClick={handleConfirm}
       >
-        Confirm Appointment &amp; Generate Samples
+        {isReconfirm ? 'Save & Regenerate Barcodes' : 'Confirm Appointment & Generate Samples'}
       </Button>
     </div>
   )
@@ -654,23 +656,26 @@ export default function AdminNewAppointmentPage() {
   const [resumeError, setResumeError] = useState('')
   const [createError, setCreateError] = useState('')
 
-  // Resuming an appointment that was auto-created after patient selection but never made it
-  // through test selection — otherwise it's permanently stuck showing "select at least one
-  // package or test" with no way back into the picker.
+  const EDITABLE_STATUSES = ['Created', 'Confirmed', 'SamplesGenerating', 'SamplesGenerated']
+
+  // Resume an existing appointment into the test-selection step. Works for any pre-collection
+  // status — the backend allows package/test changes and re-confirmation up until samples are
+  // physically collected.
   useEffect(() => {
     if (!resumeId) return
     getAppointmentApi(resumeId)
       .then((appt) => {
-        if (appt.status !== 'Created') {
-          setResumeError(`This appointment is already ${appt.status} — nothing left to select.`)
-          return
+        if (EDITABLE_STATUSES.includes(appt.status)) {
+          setAppointmentId(appt.id)
+          setStep('tests')
+        } else {
+          setResumeError(`Cannot edit tests for an appointment in '${appt.status}' status — samples have already been collected.`)
         }
-        setAppointmentId(appt.id)
-        setStep('tests')
       })
       .catch((err: unknown) => {
         setResumeError(err instanceof Error ? err.message : 'Could not load this appointment')
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeId])
 
   async function handleLogout() {
@@ -696,7 +701,9 @@ export default function AdminNewAppointmentPage() {
           </Link>
         </div>
 
-        <h1 className="text-2xl font-extrabold text-slate-900 mb-6">New Walk-In Appointment</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900 mb-6">
+          {resumeId ? 'Edit Appointment' : 'New Walk-In Appointment'}
+        </h1>
 
         {step === 'resuming' && (
           <Card>
@@ -749,6 +756,7 @@ export default function AdminNewAppointmentPage() {
         {step === 'tests' && appointmentId && (
           <TestSelectionStep
             appointmentId={appointmentId}
+            isReconfirm={!!resumeId}
             onConfirmed={(ids) => {
               setSampleIds(ids)
               setStep('done')

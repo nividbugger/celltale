@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   getDocs,
+  onSnapshot,
   Timestamp,
   serverTimestamp,
   limit,
@@ -136,6 +137,38 @@ export async function getReportByAppointmentId(appointmentId: string): Promise<R
   if (snap.empty) return null
   const d = snap.docs[0]
   return { id: d.id, ...d.data() } as Report
+}
+
+export function subscribeToReportByAppointmentId(
+  appointmentId: string,
+  callback: (report: Report | null) => void,
+): () => void {
+  const q = query(
+    collection(db, 'reports'),
+    where('appointmentId', '==', appointmentId),
+    limit(1),
+  )
+  return onSnapshot(q, (snap) => {
+    if (snap.empty) {
+      callback(null)
+    } else {
+      const d = snap.docs[0]
+      callback({ id: d.id, ...d.data() } as Report)
+    }
+  })
+}
+
+export async function updateReport(
+  reportId: string,
+  data: { testValues: TestValue[]; summary?: string; testIds?: string[] },
+): Promise<void> {
+  const payload: Record<string, unknown> = {
+    testValues: data.testValues,
+    uploadedAt: serverTimestamp(),
+  }
+  if (data.summary !== undefined) payload.summary = data.summary
+  if (data.testIds) payload.testIds = data.testIds
+  await updateDoc(doc(db, 'reports', reportId), payload)
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────

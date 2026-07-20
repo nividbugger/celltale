@@ -59,6 +59,7 @@ public sealed class ErbaDriver : IAnalyzerDriver
     private const int   R_Value       = 3;  // field 4: measurement value
     private const int   R_Unit        = 4;  // field 5: units (ISO 2955)
     private const int   R_Flag        = 6;  // field 7: abnormal flag N/A/H/L/HH/LL
+    private const int   R_RefRange    = 5;  // field 6: reference range from analyzer (e.g. "2 TO 3")
     private const int   R_DateTime    = 12; // field 13: Date/Time test completed yyyyMMddHHmmss
 
     // TODO(manual): verify these masked-value strings against the XL-200 firmware
@@ -157,16 +158,21 @@ public sealed class ErbaDriver : IAnalyzerDriver
         string testCodeRaw = AstmRecord.Component(testIdField, R_CodeComp);
         string testCode    = ErbaTestCodeMap.ToNeutral(testCodeRaw);
 
-        string valueRaw = AstmRecord.Field(rRecord, R_Value);
-        string unit     = AstmRecord.Field(rRecord, R_Unit);
-        string flagRaw  = AstmRecord.Field(rRecord, R_Flag);
-        string dateRaw  = AstmRecord.Field(rRecord, R_DateTime);
+        string valueRaw  = AstmRecord.Field(rRecord, R_Value);
+        string unit      = AstmRecord.Field(rRecord, R_Unit);
+        string refRaw    = AstmRecord.Field(rRecord, R_RefRange);
+        string flagRaw   = AstmRecord.Field(rRecord, R_Flag);
+        string dateRaw   = AstmRecord.Field(rRecord, R_DateTime);
+
+        // Normalize reference range: "^DEFAULT" or any caret-prefixed default → null so the
+        // API side falls back to the Firestore biologicalReference for that test.
+        string? refRange = string.IsNullOrWhiteSpace(refRaw) || refRaw.StartsWith('^') ? null : refRaw;
 
         ResultFlag flag  = ParseFlag(valueRaw, flagRaw);
         string? value    = flag is ResultFlag.AnalysisError or ResultFlag.OutOfRange ? null : valueRaw;
         DateTimeOffset at = TryParseDateTime(dateRaw) ?? DateTimeOffset.UtcNow;
 
-        return new Result(testCode, value, unit, flag, at);
+        return new Result(testCode, value, unit, flag, at, refRange);
     }
 
     private static ResultFlag ParseFlag(string value, string flagField)

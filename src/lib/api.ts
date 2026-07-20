@@ -329,8 +329,11 @@ export interface AppointmentRecord {
 
 export interface SamplePreview {
   sampleType: 'blood' | 'urine' | 'stool' | 'swab' | 'other'
-  /** Present when the tube comes from a named package sample group. */
+  /** Present when the tube comes from a named package sample group or manual color assignment. */
   label?: string
+  /** The actual tube color name (e.g. "Lavender") to drive the dot color in the preview.
+   * Set from the manual color picker label, or the test's configured tubeColor for auto mode. */
+  tubeColorName?: string
   testNames: string[]
 }
 
@@ -464,6 +467,13 @@ export async function setAppointmentStatus(
 
 export async function deleteAppointmentApi(id: string): Promise<AppointmentRecord> {
   return apiFetch(`/appointments/${encodeURIComponent(id)}/delete`, { method: 'POST' })
+}
+
+/** Admin-only. Deletes generated samples and resets the appointment to 'Created' so tests,
+ * packages, and tube assignments can be edited and samples regenerated. Blocked once samples
+ * are physically collected. */
+export async function resetAppointmentToDraft(id: string): Promise<AppointmentRecord> {
+  return apiFetch(`/appointments/${encodeURIComponent(id)}/reset-to-draft`, { method: 'POST' })
 }
 
 /** Walks the appointment from wherever it currently is (SamplesCollected or later) up through

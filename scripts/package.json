@@ -5,7 +5,8 @@
   "description": "One-off, manually-run data migration scripts for the LIMS refactor. Not deployed as a Cloud Function.",
   "scripts": {
     "migrate-lims": "ts-node migrate-lims.ts",
-    "seed": "ts-node seed-emulator.ts"
+    "seed": "ts-node seed-emulator.ts",
+    "seed:prod-tests": "ts-node seed-prod-tests.ts"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0"

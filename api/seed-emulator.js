@@ -31,7 +31,7 @@ const T = {
   urine: 'test-urine',
 }
 
-const PKG = { basic: 'pkg-basic', economy: 'pkg-economy', advanced: 'pkg-advanced' }
+const PKG = { basic: 'basic', economy: 'economy', advanced: 'advanced' }
 
 const PID = {
   ravi:   'patient-001',

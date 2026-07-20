@@ -37,11 +37,26 @@ public static class SysmexTestCodeMap
         "NRBC#", "NRBC%",
         // Reticulocytes (available on XN-330 with RET channel)
         "RET#", "RET%", "IRF", "LFR", "MFR", "HFR", "RET-HE",
+        // RBC morphology ratios
+        "MICROR", "MACROR",
         // Other XN parameters
         "HPC#", "IPF", "PLT-F",
         // Body fluid mode
         "WBC-BF", "RBC-BF", "MN#", "MN%", "PMN#", "PMN%", "TC-BF#",
     };
+
+    // Prefixes/suffixes for result codes that are not reportable test values:
+    //   SCAT_* / DIST_* = scattergram/histogram PNG file path references
+    //   *?             = Sysmex morphology interpretation flags (heuristic scores 0-100)
+    private static readonly string[] NoisePrefixes = { "SCAT_", "DIST_" };
+
+    /// <summary>
+    /// Returns true for result codes that are not reportable measurements and should be
+    /// dropped by the driver before the result set reaches the API.
+    /// </summary>
+    public static bool IsNoise(string code) =>
+        code.EndsWith('?') ||
+        NoisePrefixes.Any(p => code.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Convert a neutral code to the Sysmex parameter string for the O record.</summary>
     public static string ToSysmex(string neutralCode)

@@ -52,6 +52,7 @@ public sealed class SysmexDriver : IAnalyzerDriver
     private const int R_ParamComp   = 4;   // component 4 within field 3 = parameter code
     private const int R_Value       = 3;   // field 4: Data/Measurement Value
     private const int R_Unit        = 4;   // field 5: Units
+    private const int R_RefRange    = 5;   // field 6: reference range from analyzer
     private const int R_Flag        = 6;   // field 7: Result Abnormal Flags (L/H/N/A/LL/HH/>/<)
     private const int R_DateTime    = 12;  // field 13: Date/Time Test Completed (yyyyMMddHHmmss)
 
@@ -98,12 +99,27 @@ public sealed class SysmexDriver : IAnalyzerDriver
         string? pRecord = message.Records.FirstOrDefault(r => AstmRecord.RecordType(r) == "P");
         string? oRecord = message.Records.FirstOrDefault(r => AstmRecord.RecordType(r) == "O");
 
-        string sampleId = oRecord != null ? AstmRecord.Field(oRecord, O_SampleId) : "UNKNOWN";
+        // O record field 3 (index 2) is the specimen ID. When the operator manually enters
+        // a sample ID, some Sysmex firmware versions populate it here; others only populate
+        // the P record patient ID. Try O first, then fall back to P so both workflows work.
+        string sampleId = oRecord != null ? AstmRecord.Field(oRecord, O_SampleId) : "";
         Patient? patient = pRecord != null ? ParsePatient(pRecord) : null;
+        if (string.IsNullOrWhiteSpace(sampleId) && patient != null)
+        {
+            sampleId = patient.PatientId;
+            _log.LogDebug("Sysmex: O record specimen ID empty — falling back to P patient ID {Id}", sampleId);
+        }
+        if (string.IsNullOrWhiteSpace(sampleId)) sampleId = "UNKNOWN";
 
         var results = new List<Result>();
         foreach (string r in message.Records.Where(r => AstmRecord.RecordType(r) == "R"))
-            results.Add(ParseRRecord(r));
+        {
+            var result = ParseRRecord(r);
+            if (!SysmexTestCodeMap.IsNoise(result.TestCode))
+                results.Add(result);
+            else
+                _log.LogDebug("Sysmex: dropping noise result code {Code}", result.TestCode);
+        }
 
         var runTime = results.Count > 0 ? results.Max(r => r.CompletedAt) : DateTimeOffset.UtcNow;
         return new ResultSet(sampleId, AnalyzerId, patient, results.AsReadOnly(), runTime);
@@ -131,14 +147,17 @@ public sealed class SysmexDriver : IAnalyzerDriver
         string testCode    = SysmexTestCodeMap.ToNeutral(paramCode);
         string valueRaw    = AstmRecord.Field(rRecord, R_Value);
         string unit        = AstmRecord.Field(rRecord, R_Unit);
+        string refRaw      = AstmRecord.Field(rRecord, R_RefRange);
         string flagRaw     = AstmRecord.Field(rRecord, R_Flag);
         string dateRaw     = AstmRecord.Field(rRecord, R_DateTime);
+
+        string? refRange   = string.IsNullOrWhiteSpace(refRaw) || refRaw.StartsWith('^') ? null : refRaw;
 
         var flag = ParseFlag(valueRaw, flagRaw);
         string? value = flag is ResultFlag.AnalysisError or ResultFlag.OutOfRange ? null : valueRaw;
         DateTimeOffset completedAt = TryParseDateTime(dateRaw) ?? DateTimeOffset.UtcNow;
 
-        return new Result(testCode, value, unit, flag, completedAt);
+        return new Result(testCode, value, unit, flag, completedAt, refRange);
     }
 
     private static ResultFlag ParseFlag(string value, string flagField)

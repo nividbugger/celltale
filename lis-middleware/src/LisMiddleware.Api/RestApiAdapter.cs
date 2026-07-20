@@ -143,11 +143,12 @@ public sealed class RestApiAdapter : IApiAdapter
             },
             results = results.Results.Select(r => new
             {
-                testCode    = r.TestCode,
-                value       = r.Value,
-                unit        = r.Unit,
-                flag        = r.Flag.ToString(),
-                completedAt = r.CompletedAt.ToString("o")
+                testCode       = r.TestCode,
+                value          = r.Value,
+                unit           = r.Unit,
+                flag           = r.Flag.ToString(),
+                referenceRange = r.ReferenceRange,
+                completedAt    = r.CompletedAt.ToString("o")
             })
         };
     }
