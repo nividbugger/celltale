@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { verifyAuth, AuthRequest } from '../middleware/verifyAuth'
 import { requireAdmin } from '../middleware/requireAdmin'
 import { asyncHandler } from '../middleware/asyncHandler'
@@ -114,9 +115,9 @@ router.post(
         name,
         phone,
         email: email ?? '',
-        collectionTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        collectionTimestamp: FieldValue.serverTimestamp(),
         role: 'patient' as const,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       }
       if (company && company !== '') userDoc.company = company
       if (parsed.data.age) userDoc.age = parsed.data.age
@@ -195,10 +196,10 @@ router.patch(
     if (hasName) updates.name = parsed.data.name
     if (hasPhone) updates.phone = parsed.data.phone
     if (hasEmail) updates.email = parsed.data.email ?? ''
-    if (hasCompany) updates.company = parsed.data.company ?? admin.firestore.FieldValue.delete()
-    if (hasAge) updates.age = parsed.data.age ?? admin.firestore.FieldValue.delete()
-    if (hasGender) updates.gender = parsed.data.gender ?? admin.firestore.FieldValue.delete()
-    if (hasAdditionalInfo) updates.additionalInfo = parsed.data.additionalInfo ?? admin.firestore.FieldValue.delete()
+    if (hasCompany) updates.company = parsed.data.company ?? FieldValue.delete()
+    if (hasAge) updates.age = parsed.data.age ?? FieldValue.delete()
+    if (hasGender) updates.gender = parsed.data.gender ?? FieldValue.delete()
+    if (hasAdditionalInfo) updates.additionalInfo = parsed.data.additionalInfo ?? FieldValue.delete()
 
     try {
       await userRef.update(updates)

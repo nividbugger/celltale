@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   getDocs,
+  onSnapshot,
   Timestamp,
   serverTimestamp,
   limit,
@@ -138,6 +139,38 @@ export async function getReportByAppointmentId(appointmentId: string): Promise<R
   return { id: d.id, ...d.data() } as Report
 }
 
+export function subscribeToReportByAppointmentId(
+  appointmentId: string,
+  callback: (report: Report | null) => void,
+): () => void {
+  const q = query(
+    collection(db, 'reports'),
+    where('appointmentId', '==', appointmentId),
+    limit(1),
+  )
+  return onSnapshot(q, (snap) => {
+    if (snap.empty) {
+      callback(null)
+    } else {
+      const d = snap.docs[0]
+      callback({ id: d.id, ...d.data() } as Report)
+    }
+  })
+}
+
+export async function updateReport(
+  reportId: string,
+  data: { testValues: TestValue[]; summary?: string; testIds?: string[] },
+): Promise<void> {
+  const payload: Record<string, unknown> = {
+    testValues: data.testValues,
+    uploadedAt: serverTimestamp(),
+  }
+  if (data.summary !== undefined) payload.summary = data.summary
+  if (data.testIds) payload.testIds = data.testIds
+  await updateDoc(doc(db, 'reports', reportId), payload)
+}
+
 // ─── Admin ────────────────────────────────────────────────────────────────
 
 export async function getAllPatients(): Promise<User[]> {
@@ -173,7 +206,7 @@ export async function getAdminStats(): Promise<{
 export async function getAllPackages(): Promise<Package[]> {
   const q = query(collection(db, 'packages'), orderBy('order', 'asc'))
   const snap = await getDocs(q)
-  return snap.docs.map((d) => ({ ...d.data() } as Package))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Package))
 }
 
 export async function savePackage(pkg: Package): Promise<void> {
@@ -252,6 +285,11 @@ export async function getAllTests(): Promise<Test[]> {
   const snap = await getDocs(collection(db, 'tests'))
   const tests = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Test)
   return tests.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+export async function getActiveTests(): Promise<Test[]> {
+  const all = await getAllTests()
+  return all.filter((t) => t.isActive !== false)
 }
 
 export async function createTest(data: Omit<Test, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {

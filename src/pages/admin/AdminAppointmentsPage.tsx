@@ -15,6 +15,7 @@ import {
   Plus,
   Truck,
   PackageCheck,
+  Pencil,
 } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
@@ -33,13 +34,14 @@ import {
   cancelAppointment,
   setAppointmentStatus,
   deleteAppointmentApi,
+  updateAppointmentApi,
   getAppointmentSamples,
   collectSample,
   type SampleRecord,
 } from '../../lib/api'
 import { buildReportHtml } from '../../lib/reportHtml'
 import { SamplePrintModal } from '../../components/admin/SamplePrintModal'
-import { DEFAULT_CLINIC_SETTINGS } from '../../types'
+import { DEFAULT_CLINIC_SETTINGS, TIME_SLOTS } from '../../types'
 import type { Appointment, AppointmentStatus, ClinicSettings, Report } from '../../types'
 import { format } from 'date-fns'
 
@@ -174,6 +176,13 @@ function AppointmentRow({
   const [reportModalOpen, setReportModalOpen] = useState(false)
   const [report, setReport] = useState<Report | null>(null)
   const [reportLoading, setReportLoading] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editDate, setEditDate] = useState(appt.date)
+  const [editTimeSlot, setEditTimeSlot] = useState(appt.timeSlot)
+  const [editAddress, setEditAddress] = useState(appt.collectionAddress)
+  const [editNotes, setEditNotes] = useState(appt.notes ?? '')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
 
   const packageLabel = describePackages(appt)
   const cost = describeCost(appt)
@@ -267,6 +276,7 @@ function AppointmentRow({
             <FlaskConical className="h-3.5 w-3.5 mr-1" /> Generate Samples
           </Button>
         )
+
       case 'SamplesGenerated':
         return (
           <Button size="sm" onClick={() => setCollectOpen(true)}>
@@ -291,6 +301,35 @@ function AppointmentRow({
         )
       default:
         return null
+    }
+  }
+
+  const canEdit =
+    appt.status === 'Created' ||
+    appt.status === 'Confirmed' ||
+    appt.status === 'SamplesGenerating' ||
+    appt.status === 'SamplesGenerated'
+
+  async function handleEditSave() {
+    if (!editDate || !editTimeSlot || editAddress.trim().length < 5) {
+      setEditError('Date, time slot, and address (min 5 chars) are required')
+      return
+    }
+    setEditSaving(true)
+    setEditError('')
+    try {
+      await updateAppointmentApi(appt.id, {
+        date: editDate,
+        timeSlot: editTimeSlot,
+        collectionAddress: editAddress.trim(),
+        notes: editNotes.trim() || undefined,
+      })
+      setEditOpen(false)
+      onUpdate()
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Failed to save changes')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -334,6 +373,27 @@ function AppointmentRow({
               {canViewReport && (
                 <Button size="sm" onClick={handleViewReport}>
                   <Eye className="h-3.5 w-3.5 mr-1" /> View Report
+                </Button>
+              )}
+
+              {(appt.status === 'Confirmed' || appt.status === 'SamplesGenerating' || appt.status === 'SamplesGenerated') && (
+                <Link to={`/admin/appointments/new/${appt.id}`}>
+                  <Button size="sm" variant="outline">
+                    <FlaskConical className="h-3.5 w-3.5 mr-1" /> Edit Tests
+                  </Button>
+                </Link>
+              )}
+
+              {canEdit && (
+                <Button size="sm" variant="outline" onClick={() => {
+                  setEditDate(appt.date)
+                  setEditTimeSlot(appt.timeSlot)
+                  setEditAddress(appt.collectionAddress)
+                  setEditNotes(appt.notes ?? '')
+                  setEditError('')
+                  setEditOpen(true)
+                }}>
+                  <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
                 </Button>
               )}
 
@@ -425,6 +485,60 @@ function AppointmentRow({
             </Button>
             <Button className="flex-1 bg-red-600 hover:bg-red-700" loading={deleting} onClick={handleDelete}>
               Delete
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={editOpen} onClose={() => setEditOpen(false)} title="Edit Appointment">
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Date</label>
+            <input
+              type="date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Time Slot</label>
+            <select
+              value={editTimeSlot}
+              onChange={(e) => setEditTimeSlot(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              {TIME_SLOTS.map((slot) => (
+                <option key={slot} value={slot}>{slot}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Collection Address</label>
+            <textarea
+              value={editAddress}
+              onChange={(e) => setEditAddress(e.target.value)}
+              rows={2}
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Notes (optional)</label>
+            <textarea
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              rows={2}
+              placeholder="Any additional notes…"
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+            />
+          </div>
+          {editError && <p className="text-red-500 text-xs">{editError}</p>}
+          <div className="flex gap-3 pt-1">
+            <Button variant="outline" className="flex-1" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="flex-1" loading={editSaving} onClick={handleEditSave}>
+              Save Changes
             </Button>
           </div>
         </div>

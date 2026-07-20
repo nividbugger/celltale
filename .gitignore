@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+api/dist/
+functions/lib/
 
 # Environment variables (contains Firebase secrets)
 .env.local
@@ -20,3 +22,13 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Firebase hosting deploy cache
+.firebase/
+
+# .NET build output (lis-middleware)
+lis-middleware/**/bin/
+lis-middleware/**/obj/
+lis-middleware/publish/
+lis-middleware/*.zip
+publish-out/

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   Search, UserPlus, ChevronRight, CheckCircle, Plus, PackageOpen,
@@ -10,6 +10,7 @@ import { Input } from '../../components/ui/Input'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
+import { TUBE_COLORS, PRIMARY_TUBE_COLORS, EXTRA_TUBE_COLORS } from '../../lib/tubeColors'
 import { TestPicker } from '../../components/admin/TestPicker'
 import { PackagePicker } from '../../components/admin/PackagePicker'
 import { SamplePrintModal } from '../../components/admin/SamplePrintModal'
@@ -26,6 +27,7 @@ import {
   removeTestFromAppointment,
   getAppointmentSummary,
   setAppointmentCostOverride,
+  setManualTubeColors,
   confirmAppointment,
   generateSamples,
   type AppointmentSummary,
@@ -213,13 +215,48 @@ function CreatingStep({
   return <LoadingSpinner className="py-16" />
 }
 
+// ─── Tube Preview ─────────────────────────────────────────────────────────────
+
+function TubePreview({ previews }: { previews: import('../../lib/api').SamplePreview[] }) {
+  return (
+    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+        <BarcodeIcon className="h-3.5 w-3.5" />
+        Sample Collection &mdash; {previews.length} tube{previews.length !== 1 ? 's' : ''}, {previews.length} barcode{previews.length !== 1 ? 's' : ''} to print
+      </p>
+      {previews.map((preview, i) => {
+        const color = TUBE_COLORS.find((c) => c.name === preview.tubeColorName) ?? TUBE_COLORS[i % TUBE_COLORS.length]
+        const sampleTypeLabel = preview.sampleType.charAt(0).toUpperCase() + preview.sampleType.slice(1)
+        return (
+          <div key={i} className="flex items-start gap-2.5 rounded-lg bg-white border border-slate-200 px-3 py-2.5">
+            <span className={`mt-0.5 h-4 w-4 rounded-full flex-shrink-0 ${color.dot} ring-2 ${color.ring} ring-offset-1`} />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-slate-700">
+                Tube {i + 1}
+                <span className={`ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium ${color.badge}`}>
+                  {color.name}
+                </span>
+                <span className="ml-1.5 text-slate-400 font-normal">· {sampleTypeLabel}</span>
+                {preview.label && <span className="ml-1.5 text-slate-400 font-normal">· {preview.label}</span>}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{preview.testNames.join(' · ')}</p>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Step 3: Test Selection (Packages / Additional Tests / Summary) ─────────
 
 function TestSelectionStep({
   appointmentId,
+  isReconfirm,
   onConfirmed,
 }: {
   appointmentId: string
+  isReconfirm: boolean
   onConfirmed: (sampleIds: string[]) => void
 }) {
   const { packages } = usePackages()
@@ -229,13 +266,54 @@ function TestSelectionStep({
   const [error, setError] = useState('')
   const [costDraft, setCostDraft] = useState('')
   const [editingCost, setEditingCost] = useState(false)
+  const [tubeColorMode, setTubeColorMode] = useState<'auto' | 'custom'>('auto')
+  const [manualTestColorMap, setManualTestColorMap] = useState<Record<string, string>>({})
+  const summaryLoaded = useRef(false)
 
   useEffect(() => {
     getAllTests().then(setAllTests)
   }, [])
 
   async function refetchSummary() {
-    setSummary(await getAppointmentSummary(appointmentId))
+    const s = await getAppointmentSummary(appointmentId)
+    setSummary(s)
+    // Initialise colour state from the server on first load only.
+    if (!summaryLoaded.current) {
+      summaryLoaded.current = true
+      if (s.manualTubeColorMap && Object.keys(s.manualTubeColorMap).length > 0) {
+        setTubeColorMode('custom')
+        setManualTestColorMap(s.manualTubeColorMap)
+      }
+    }
+    return s
+  }
+
+  async function handleColorAssign(testId: string, colorName: string) {
+    const newMap = {
+      ...manualTestColorMap,
+      [testId]: manualTestColorMap[testId] === colorName ? '' : colorName,
+    }
+    setManualTestColorMap(newMap)
+    setError('')
+    try {
+      await setManualTubeColors(appointmentId, newMap)
+      setSummary(await getAppointmentSummary(appointmentId))
+    } catch (err: unknown) {
+      setManualTestColorMap(manualTestColorMap)
+      setError(err instanceof Error ? err.message : 'Failed to save tube colour')
+    }
+  }
+
+  async function handleSetAutoMode() {
+    setTubeColorMode('auto')
+    setManualTestColorMap({})
+    setError('')
+    try {
+      await setManualTubeColors(appointmentId, {})
+      setSummary(await getAppointmentSummary(appointmentId))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to reset tube colours')
+    }
   }
 
   useEffect(() => {
@@ -356,13 +434,136 @@ function TestSelectionStep({
           {summary.resolvedTests.length === 0 ? (
             <p className="text-sm text-slate-400">Add a package or test to get started.</p>
           ) : (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {summary.resolvedTests.map((t) => (
-                <span key={t.testId} className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">
-                  ✓ {t.name}
-                </span>
-              ))}
-            </div>
+            <>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {summary.resolvedTests.map((t) => (
+                  <span key={t.testId} className="text-xs bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">
+                    ✓ {t.name}
+                  </span>
+                ))}
+              </div>
+
+              {/* Per-test tube colour assignment for manually added tests */}
+              {summary.manualTestIds.length > 0 && (
+                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                      Additional Test Tubes
+                    </label>
+                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+                      <button
+                        type="button"
+                        onClick={handleSetAutoMode}
+                        disabled={busy}
+                        className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                          tubeColorMode === 'auto'
+                            ? 'bg-white text-slate-800 shadow-sm'
+                            : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        Auto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTubeColorMode('custom')}
+                        disabled={busy}
+                        className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                          tubeColorMode === 'custom'
+                            ? 'bg-white text-slate-800 shadow-sm'
+                            : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        By colour
+                      </button>
+                    </div>
+                  </div>
+
+                  {tubeColorMode === 'auto' && (
+                    <p className="text-xs text-slate-400">
+                      Auto mode: tests with the same sample type share one tube.
+                    </p>
+                  )}
+
+                  {tubeColorMode === 'custom' && (
+                    <div className="space-y-2">
+                      {/* colour legend */}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        <span className="text-xs text-slate-500 font-medium">Primary:</span>
+                        {PRIMARY_TUBE_COLORS.map((c) => (
+                          <span key={c.name} className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <span className={`w-3 h-3 rounded-full ${c.dot}`} /> {c.name}
+                          </span>
+                        ))}
+                        <span className="text-xs text-slate-300 mx-1">|</span>
+                        <span className="text-xs text-slate-500 font-medium">Other:</span>
+                        {EXTRA_TUBE_COLORS.map((c) => (
+                          <span key={c.name} className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <span className={`w-3 h-3 rounded-full ${c.dot}`} /> {c.name}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Per-test colour buttons */}
+                      {summary.resolvedTests
+                        .filter((t) => summary.manualTestIds.includes(t.testId))
+                        .map((test) => {
+                          const assigned = manualTestColorMap[test.testId] ?? ''
+                          return (
+                            <div key={test.testId} className="flex items-center gap-3">
+                              <span className="flex-1 text-sm text-slate-700 min-w-0 truncate">
+                                {test.name}
+                              </span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {PRIMARY_TUBE_COLORS.map((c) => (
+                                  <button
+                                    key={c.name}
+                                    type="button"
+                                    title={c.name}
+                                    onClick={() => handleColorAssign(test.testId, c.name)}
+                                    className={`w-6 h-6 rounded-full border-2 transition-all ${c.dot} ${
+                                      assigned === c.name
+                                        ? `${c.border} ring-2 ${c.ring} ring-offset-1 scale-110`
+                                        : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105'
+                                    }`}
+                                  />
+                                ))}
+                                <span className="w-px h-4 bg-slate-200 mx-1" />
+                                {EXTRA_TUBE_COLORS.map((c) => (
+                                  <button
+                                    key={c.name}
+                                    type="button"
+                                    title={c.name}
+                                    onClick={() => handleColorAssign(test.testId, c.name)}
+                                    className={`w-6 h-6 rounded-full border-2 transition-all ${c.dot} ${
+                                      assigned === c.name
+                                        ? `${c.border} ring-2 ${c.ring} ring-offset-1 scale-110`
+                                        : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full font-medium w-20 text-center shrink-0 ${
+                                  assigned
+                                    ? (TUBE_COLORS.find((c) => c.name === assigned)?.badge ?? 'bg-slate-100 text-slate-500')
+                                    : 'bg-slate-100 text-slate-400 italic'
+                                }`}
+                              >
+                                {assigned || 'Auto'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tube / sample collection preview — only shown once backend returns samplePreviews */}
+              {(summary.samplePreviews ?? []).length > 0 && (
+                <TubePreview previews={summary.samplePreviews} />
+              )}
+            </>
           )}
           <div className="grid grid-cols-3 gap-3 border-t border-slate-100 pt-4">
             <div>
@@ -435,7 +636,7 @@ function TestSelectionStep({
         disabled={summary.resolvedTests.length === 0}
         onClick={handleConfirm}
       >
-        Confirm Appointment &amp; Generate Samples
+        {isReconfirm ? 'Save & Regenerate Barcodes' : 'Confirm Appointment & Generate Samples'}
       </Button>
     </div>
   )
@@ -455,23 +656,26 @@ export default function AdminNewAppointmentPage() {
   const [resumeError, setResumeError] = useState('')
   const [createError, setCreateError] = useState('')
 
-  // Resuming an appointment that was auto-created after patient selection but never made it
-  // through test selection — otherwise it's permanently stuck showing "select at least one
-  // package or test" with no way back into the picker.
+  const EDITABLE_STATUSES = ['Created', 'Confirmed', 'SamplesGenerating', 'SamplesGenerated']
+
+  // Resume an existing appointment into the test-selection step. Works for any pre-collection
+  // status — the backend allows package/test changes and re-confirmation up until samples are
+  // physically collected.
   useEffect(() => {
     if (!resumeId) return
     getAppointmentApi(resumeId)
       .then((appt) => {
-        if (appt.status !== 'Created') {
-          setResumeError(`This appointment is already ${appt.status} — nothing left to select.`)
-          return
+        if (EDITABLE_STATUSES.includes(appt.status)) {
+          setAppointmentId(appt.id)
+          setStep('tests')
+        } else {
+          setResumeError(`Cannot edit tests for an appointment in '${appt.status}' status — samples have already been collected.`)
         }
-        setAppointmentId(appt.id)
-        setStep('tests')
       })
       .catch((err: unknown) => {
         setResumeError(err instanceof Error ? err.message : 'Could not load this appointment')
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeId])
 
   async function handleLogout() {
@@ -497,7 +701,9 @@ export default function AdminNewAppointmentPage() {
           </Link>
         </div>
 
-        <h1 className="text-2xl font-extrabold text-slate-900 mb-6">New Walk-In Appointment</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900 mb-6">
+          {resumeId ? 'Edit Appointment' : 'New Walk-In Appointment'}
+        </h1>
 
         {step === 'resuming' && (
           <Card>
@@ -550,6 +756,7 @@ export default function AdminNewAppointmentPage() {
         {step === 'tests' && appointmentId && (
           <TestSelectionStep
             appointmentId={appointmentId}
+            isReconfirm={!!resumeId}
             onConfirmed={(ids) => {
               setSampleIds(ids)
               setStep('done')

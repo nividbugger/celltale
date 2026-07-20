@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { Beaker, Search, Plus, Pencil, Trash2 } from 'lucide-react'
+import { TUBE_COLORS, PRIMARY_TUBE_COLORS, EXTRA_TUBE_COLORS } from '../../lib/tubeColors'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Modal } from '../../components/ui/Modal'
@@ -11,14 +12,28 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllTests, getAllPackages } from '../../lib/firestore'
-import { createTest, updateTest, deleteTest } from '../../lib/api'
+import { createTest, updateTest, deleteTest, toggleTestActive } from '../../lib/api'
 import type { Test, TestParameter, Package } from '../../types'
-import { format } from 'date-fns'
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Hematology:     'bg-red-50 text-red-700',
+  Biochemistry:   'bg-yellow-50 text-yellow-700',
+  Thyroid:        'bg-blue-50 text-blue-700',
+  Vitamins:       'bg-green-50 text-green-700',
+  Hormones:       'bg-purple-50 text-purple-700',
+  Serology:       'bg-indigo-50 text-indigo-700',
+  Cardiac:        'bg-rose-50 text-rose-700',
+  Coagulation:    'bg-orange-50 text-orange-700',
+  'Tumor Markers':'bg-slate-100 text-slate-700',
+  Urine:          'bg-cyan-50 text-cyan-700',
+  Stool:          'bg-amber-50 text-amber-700',
+}
 
 interface TestFormData {
   name: string
   parameters: TestParameter[]
   cost: string
+  tubeColor: string
 }
 
 function TestForm({
@@ -37,6 +52,8 @@ function TestForm({
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<TestFormData>({
     defaultValues: test
@@ -44,9 +61,12 @@ function TestForm({
           name: test.name,
           parameters: test.parameters,
           cost: test.cost != null ? String(test.cost) : '',
+          tubeColor: test.tubeColor ?? '',
         }
-      : { name: '', parameters: [], cost: '' },
+      : { name: '', parameters: [], cost: '', tubeColor: '' },
   })
+
+  const watchedColor = watch('tubeColor')
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -70,11 +90,14 @@ function TestForm({
         }
       }
 
+      const tubeColor = data.tubeColor || undefined
+
       if (isNew) {
         const result = await createTest({
           name: data.name.trim(),
           parameters: data.parameters,
           cost,
+          tubeColor,
         })
         const now = new Date()
         onSave({
@@ -83,6 +106,7 @@ function TestForm({
           name: result.name,
           parameters: result.parameters,
           cost: result.cost,
+          tubeColor: result.tubeColor,
           createdAt: { toDate: () => now } as any,
           updatedAt: { toDate: () => now } as any,
         })
@@ -91,6 +115,7 @@ function TestForm({
           name: data.name.trim(),
           parameters: data.parameters,
           cost,
+          tubeColor: tubeColor ?? null,
         })
         const now = new Date()
         onSave({
@@ -99,6 +124,7 @@ function TestForm({
           name: result.name,
           parameters: result.parameters,
           cost: result.cost,
+          tubeColor: result.tubeColor,
           createdAt: test.createdAt,
           updatedAt: { toDate: () => now } as any,
         })
@@ -130,6 +156,60 @@ function TestForm({
         step="0.01"
         {...register('cost')}
       />
+
+      {/* Tube colour */}
+      <div>
+        <label className="text-sm font-medium text-slate-700 block mb-2">
+          Standard Tube Colour
+          <span className="text-slate-400 font-normal ml-1 text-xs">(used to auto-assign tests in packages)</span>
+        </label>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Primary colours */}
+          {PRIMARY_TUBE_COLORS.map((c) => (
+            <button
+              key={c.name}
+              type="button"
+              title={c.name}
+              onClick={() => setValue('tubeColor', watchedColor === c.name ? '' : c.name)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                watchedColor === c.name
+                  ? `${c.badge} ${c.border} border-2 shadow-sm`
+                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'
+              }`}
+            >
+              <span className={`w-3 h-3 rounded-full flex-shrink-0 ${c.dot}`} />
+              {c.name}
+            </button>
+          ))}
+          <span className="w-px h-5 bg-slate-200 mx-1" />
+          {/* Extra colours */}
+          {EXTRA_TUBE_COLORS.map((c) => (
+            <button
+              key={c.name}
+              type="button"
+              title={c.name}
+              onClick={() => setValue('tubeColor', watchedColor === c.name ? '' : c.name)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                watchedColor === c.name
+                  ? `${c.badge} ${c.border} border-2 shadow-sm`
+                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'
+              }`}
+            >
+              <span className={`w-3 h-3 rounded-full flex-shrink-0 ${c.dot}`} />
+              {c.name}
+            </button>
+          ))}
+          {watchedColor && (
+            <button
+              type="button"
+              onClick={() => setValue('tubeColor', '')}
+              className="text-xs text-slate-400 hover:text-red-500 ml-1 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
 
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -209,6 +289,7 @@ export default function TestsPage() {
   const [search, setSearch] = useState('')
   const [editTest, setEditTest] = useState<Test | 'new' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Test | null>(null)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([getAllTests(), getAllPackages()])
@@ -221,9 +302,12 @@ export default function TestsPage() {
 
   const filtered = tests.filter(
     (t) =>
-      t.testId.toLowerCase().includes(search.toLowerCase()) ||
-      t.name.toLowerCase().includes(search.toLowerCase()),
+      (t.machineCode ?? t.testId).toLowerCase().includes(search.toLowerCase()) ||
+      t.name.toLowerCase().includes(search.toLowerCase()) ||
+      (t.category ?? '').toLowerCase().includes(search.toLowerCase()),
   )
+
+  const activeCount = tests.filter((t) => t.isActive !== false).length
 
   async function handleLogout() {
     await logOut()
@@ -245,6 +329,19 @@ export default function TestsPage() {
       setDeleteConfirm(null)
     } catch (err) {
       console.error('Failed to delete test:', err)
+    }
+  }
+
+  async function handleToggleActive(test: Test) {
+    const next = test.isActive === false
+    setTogglingId(test.id)
+    try {
+      await toggleTestActive(test.id, next)
+      setTests((prev) => prev.map((t) => (t.id === test.id ? { ...t, isActive: next } : t)))
+    } catch (err) {
+      console.error('Failed to toggle test active status:', err)
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -290,6 +387,11 @@ export default function TestsPage() {
           <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
             <Beaker className="h-6 w-6 text-teal-500" /> Tests
             <span className="text-slate-400 text-lg font-normal ml-1">({tests.length})</span>
+            {!loading && (
+              <span className="text-sm font-normal text-teal-600 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">
+                {activeCount} active
+              </span>
+            )}
           </h1>
           <Button size="sm" onClick={() => setEditTest('new')}>
             <Plus className="h-4 w-4 mr-1" /> Create Test
@@ -323,53 +425,92 @@ export default function TestsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-slate-400 text-xs uppercase">
-                  <th className="text-left px-6 py-3 font-semibold">Test ID</th>
-                  <th className="text-left px-6 py-3 font-semibold">Name</th>
-                  <th className="text-left px-6 py-3 font-semibold">Parameters</th>
-                  <th className="text-left px-6 py-3 font-semibold">Cost</th>
-                  <th className="text-left px-6 py-3 font-semibold hidden lg:table-cell">Created</th>
-                  <th className="px-6 py-3" />
+                  <th className="text-left px-4 py-3 font-semibold">Active</th>
+                  <th className="text-left px-4 py-3 font-semibold">Code</th>
+                  <th className="text-left px-4 py-3 font-semibold">Name</th>
+                  <th className="text-left px-4 py-3 font-semibold hidden md:table-cell">Category</th>
+                  <th className="text-left px-4 py-3 font-semibold">Tube</th>
+                  <th className="text-left px-4 py-3 font-semibold hidden xl:table-cell">Parameters</th>
+                  <th className="text-left px-4 py-3 font-semibold">Cost</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filtered.map((test) => (
-                  <tr key={test.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-3 font-mono text-teal-600 font-semibold">{test.testId}</td>
-                    <td className="px-6 py-3 font-medium text-slate-900">{test.name}</td>
-                    <td className="px-6 py-3 text-slate-600">
-                      <span className="inline-flex items-center gap-1 flex-wrap">
-                        {test.parameters.map((p, i) => (
-                          <span key={i} className="bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs">
-                            {p.parameter} <span className="text-slate-500">({p.unit})</span>
-                          </span>
-                        ))}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-slate-600">
-                      {test.cost != null ? `₹${test.cost.toLocaleString('en-IN')}` : '—'}
-                    </td>
-                    <td className="px-6 py-3 text-slate-500 hidden lg:table-cell">
-                      {test.createdAt?.toDate
-                        ? format(test.createdAt.toDate(), 'dd MMM yyyy')
-                        : '—'}
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" variant="outline" onClick={() => setEditTest(test)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => setDeleteConfirm(test)}
+                {filtered.map((test) => {
+                  const isActive = test.isActive !== false
+                  const tc = TUBE_COLORS.find((c) => c.name === test.tubeColor)
+                  const catColor = CATEGORY_COLORS[test.category ?? ''] ?? 'bg-slate-100 text-slate-600'
+                  return (
+                    <tr key={test.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <button
+                          disabled={togglingId === test.id}
+                          onClick={() => handleToggleActive(test)}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${
+                            isActive
+                              ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
+                              : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100 hover:text-slate-600'
+                          }`}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {isActive ? 'Active' : 'Inactive'}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-teal-600 font-semibold text-xs">
+                        {test.machineCode ?? test.testId}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-900">{test.name}</td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        {test.category ? (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${catColor}`}>
+                            {test.category}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {tc ? (
+                          <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${tc.badge}`}>
+                            <span className={`w-2 h-2 rounded-full ${tc.dot}`} />
+                            {tc.name}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 hidden xl:table-cell">
+                        <span className="inline-flex items-center gap-1 flex-wrap">
+                          {test.parameters.slice(0, 3).map((p, i) => (
+                            <span key={i} className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs">
+                              {p.parameter}
+                            </span>
+                          ))}
+                          {test.parameters.length > 3 && (
+                            <span className="text-slate-400 text-xs">+{test.parameters.length - 3}</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {test.cost != null ? `₹${test.cost.toLocaleString('en-IN')}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" variant="outline" onClick={() => setEditTest(test)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setDeleteConfirm(test)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -118,6 +118,8 @@ export default function BookAppointmentPage() {
             <div className="grid grid-cols-1 gap-3">
               {pkgsLoading ? (
                 <LoadingSpinner className="py-8" />
+              ) : packages.length === 0 ? (
+                <p className="text-slate-500 text-sm py-8 text-center">No packages are currently available. Please contact the clinic.</p>
               ) : packages.map((pkg) => (
                 <div
                   key={pkg.id}

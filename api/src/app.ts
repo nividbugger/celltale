@@ -10,6 +10,7 @@ import adminTestsRouter from './routes/adminTests'
 import adminInvoicesRouter from './routes/adminInvoices'
 import appointmentsRouter from './routes/appointments'
 import samplesRouter from './routes/samples'
+import lisOrdersRouter from './routes/lisOrders'
 
 export const app = express()
 
@@ -71,6 +72,7 @@ app.use('/api/admin/tests', adminTestsRouter)
 app.use('/api/admin/invoices', adminInvoicesRouter)
 app.use('/api/appointments', appointmentsRouter)
 app.use('/api/samples', samplesRouter)
+app.use('/api/lis', lisOrdersRouter)
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

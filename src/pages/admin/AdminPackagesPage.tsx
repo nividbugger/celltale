@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import {
-  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save, RotateCcw
+  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save,
 } from 'lucide-react'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
@@ -11,10 +11,10 @@ import { Card, CardContent } from '../../components/ui/Card'
 import { Modal } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllPackages, savePackage, deletePackage, reorderPackages, getAllTests } from '../../lib/firestore'
+import { getAllPackages, savePackage, deletePackage, reorderPackages, getActiveTests } from '../../lib/firestore'
 import { TestPicker } from '../../components/admin/TestPicker'
-import { PACKAGES as STATIC_PACKAGES } from '../../types'
-import type { Package, PackageDetail, Test } from '../../types'
+import type { Package, PackageDetail, PackageSampleGroup, Test } from '../../types'
+import { TUBE_COLORS, PRIMARY_TUBE_COLORS, EXTRA_TUBE_COLORS } from '../../lib/tubeColors'
 
 // ─── Style presets ──────────────────────────────────────────────────────────
 
@@ -100,6 +100,7 @@ function fromFormData(
   order: number,
   allTests: Test[],
   existingDetails: PackageDetail[],
+  sampleGroups: PackageSampleGroup[],
 ): Package {
   const preset = COLOR_PRESETS[data.colorPreset] ?? COLOR_PRESETS[0]
   return {
@@ -119,6 +120,7 @@ function fromFormData(
     summary: data.summary.map((s) => s.value).filter(Boolean),
     details: existingDetails,
     testIds: data.testIds,
+    ...(sampleGroups.length > 0 ? { sampleGroups } : {}),
   }
 }
 
@@ -127,6 +129,15 @@ function detectPreset(pkg: Package): number {
 }
 
 // ─── Package Form (inside Modal) ────────────────────────────────────────────
+
+/** Build testId → color-name map from saved sampleGroups. */
+function initColorMap(sampleGroups: PackageSampleGroup[] | undefined): Record<string, string> {
+  const map: Record<string, string> = {}
+  if (sampleGroups) {
+    sampleGroups.forEach((g) => g.testIds.forEach((tid) => { map[tid] = g.label }))
+  }
+  return map
+}
 
 function PackageForm({
   pkg,
@@ -144,6 +155,14 @@ function PackageForm({
   const isNew = pkg === null
   const presetIdx = pkg ? Math.max(0, detectPreset(pkg)) : 0
   const priceTouched = useRef(!isNew)
+
+  // ─── Tube-colour state ─────────────────────────────────────────────────
+  const [customMode, setCustomMode] = useState<boolean>(
+    Boolean(pkg?.sampleGroups && pkg.sampleGroups.length > 0),
+  )
+  const [testColorMap, setTestColorMap] = useState<Record<string, string>>(() =>
+    initColorMap(pkg?.sampleGroups),
+  )
 
   const {
     register,
@@ -183,15 +202,75 @@ function PackageForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedTestIds.join(',')])
 
+  // When tests are removed, drop them from the colour map.
+  useEffect(() => {
+    if (!customMode) return
+    setTestColorMap((prev) => {
+      const selected = new Set(watchedTestIds)
+      const next = { ...prev }
+      for (const id of Object.keys(next)) {
+        if (!selected.has(id)) delete next[id]
+      }
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedTestIds.join(','), customMode])
+
+  const toggleCustomMode = useCallback(
+    (enabled: boolean) => {
+      setCustomMode(enabled)
+      if (!enabled) {
+        setTestColorMap({})
+      } else {
+        // Pre-populate from each test's standard tubeColor; admin can still override.
+        setTestColorMap((prev) => {
+          const next = { ...prev }
+          for (const testId of watchedTestIds) {
+            if (next[testId]) continue  // keep existing override
+            const tc = allTests.find((t) => t.id === testId)?.tubeColor
+            if (tc) next[testId] = tc
+          }
+          return next
+        })
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [watchedTestIds.join(','), allTests],
+  )
+
+  const assignColor = useCallback((testId: string, colorName: string) => {
+    setTestColorMap((prev) =>
+      prev[testId] === colorName
+        ? { ...prev, [testId]: '' }   // click same colour → deselect
+        : { ...prev, [testId]: colorName },
+    )
+  }, [])
+
   function applySuggestedPrice() {
     setValue('price', suggestedPrice)
     priceTouched.current = false
   }
 
+  function computeSampleGroups(): PackageSampleGroup[] {
+    if (!customMode) return []
+    const byColor = new Map<string, string[]>()
+    for (const testId of watchedTestIds) {
+      const color = testColorMap[testId]
+      if (!color) continue
+      const list = byColor.get(color) ?? []
+      list.push(testId)
+      byColor.set(color, list)
+    }
+    // Preserve display order from TUBE_COLORS
+    return TUBE_COLORS
+      .filter((c) => byColor.has(c.name))
+      .map((c) => ({ label: c.name, testIds: byColor.get(c.name)! }))
+  }
+
   async function onSubmit(data: PackageFormData) {
     const order = pkg?.order ?? nextOrder
     const id = pkg?.id ?? generatePackageId()
-    const result = fromFormData(id, data, order, allTests, pkg?.details ?? [])
+    const result = fromFormData(id, data, order, allTests, pkg?.details ?? [], computeSampleGroups())
     await savePackage(result)
     onSave(result)
   }
@@ -326,6 +405,153 @@ function PackageForm({
         />
       </div>
 
+      {/* Sample Tube Colours */}
+      {watchedTestIds.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+          {/* Header + mode toggle */}
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Sample Tubes
+            </label>
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => toggleCustomMode(false)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                  !customMode
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleCustomMode(true)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                  customMode
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                By colour
+              </button>
+            </div>
+          </div>
+
+          {!customMode && (
+            <p className="text-xs text-slate-400">
+              Auto mode: all tests of the same sample type go into one tube.
+            </p>
+          )}
+
+          {customMode && (
+            <div className="space-y-3">
+              {/* Colour legend */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <span className="text-xs text-slate-500 font-medium">Primary:</span>
+                {PRIMARY_TUBE_COLORS.map((c) => (
+                  <span key={c.name} className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span className={`w-3 h-3 rounded-full ${c.dot} flex-shrink-0`} />
+                    {c.name}
+                  </span>
+                ))}
+                <span className="text-xs text-slate-400 mx-1">|</span>
+                <span className="text-xs text-slate-500 font-medium">Other:</span>
+                {EXTRA_TUBE_COLORS.map((c) => (
+                  <span key={c.name} className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span className={`w-3 h-3 rounded-full ${c.dot} flex-shrink-0`} />
+                    {c.name}
+                  </span>
+                ))}
+              </div>
+
+              {/* Per-test colour assignment */}
+              <div className="space-y-2">
+                {watchedTestIds.map((testId) => {
+                  const test = allTests.find((t) => t.id === testId)
+                  if (!test) return null
+                  const assigned = testColorMap[testId] ?? ''
+                  return (
+                    <div key={testId} className="flex items-center gap-3">
+                      <span className="flex-1 text-sm text-slate-700 min-w-0 truncate">
+                        {test.name}
+                      </span>
+                      {/* Colour buttons: 3 primary + divider + 4 extra */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {PRIMARY_TUBE_COLORS.map((c) => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            title={c.name}
+                            onClick={() => assignColor(testId, c.name)}
+                            className={`w-6 h-6 rounded-full border-2 transition-all ${c.dot} ${
+                              assigned === c.name
+                                ? `${c.border} ring-2 ${c.ring} ring-offset-1 scale-110`
+                                : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105'
+                            }`}
+                          />
+                        ))}
+                        <span className="w-px h-4 bg-slate-200 mx-1" />
+                        {EXTRA_TUBE_COLORS.map((c) => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            title={c.name}
+                            onClick={() => assignColor(testId, c.name)}
+                            className={`w-6 h-6 rounded-full border-2 transition-all ${c.dot} ${
+                              assigned === c.name
+                                ? `${c.border} ring-2 ${c.ring} ring-offset-1 scale-110`
+                                : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      {/* Selected colour badge */}
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium w-20 text-center shrink-0 ${
+                          assigned
+                            ? (TUBE_COLORS.find((c) => c.name === assigned)?.badge ?? 'bg-slate-100 text-slate-500')
+                            : 'bg-slate-100 text-slate-400 italic'
+                        }`}
+                      >
+                        {assigned || 'Auto'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Active tube summary */}
+              {(() => {
+                const groups = computeSampleGroups()
+                if (groups.length === 0) return (
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    No colour assigned — all tests will fall back to auto grouping.
+                  </p>
+                )
+                return (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {groups.map((g) => {
+                      const tc = TUBE_COLORS.find((c) => c.name === g.label)
+                      return (
+                        <span
+                          key={g.label}
+                          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium ${tc?.badge ?? 'bg-slate-100 text-slate-700'}`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${tc?.dot ?? 'bg-slate-400'}`} />
+                          {g.label}: {g.testIds.length} test{g.testIds.length !== 1 ? 's' : ''}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Summary */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -383,8 +609,6 @@ export default function AdminPackagesPage() {
   const [allTests, setAllTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [seeding, setSeeding] = useState(false)
-  const [seedError, setSeedError] = useState<string | null>(null)
   const [editPkg, setEditPkg] = useState<Package | 'new' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Package | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -393,7 +617,7 @@ export default function AdminPackagesPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const [pkgs, tests] = await Promise.all([getAllPackages(), getAllTests()])
+      const [pkgs, tests] = await Promise.all([getAllPackages(), getActiveTests()])
       setPackages(pkgs)
       setAllTests(tests)
     } catch (err: any) {
@@ -409,22 +633,6 @@ export default function AdminPackagesPage() {
   async function handleLogout() {
     await logOut()
     navigate('/')
-  }
-
-  async function handleSeed() {
-    setSeeding(true)
-    setSeedError(null)
-    try {
-      for (const p of STATIC_PACKAGES) {
-        await savePackage(p)
-      }
-      await load()
-    } catch (err: any) {
-      console.error('Seed failed:', err)
-      setSeedError(err?.message ?? 'Seed failed. Check Firestore rules and console.')
-    } finally {
-      setSeeding(false)
-    }
   }
 
   async function handleDelete() {
@@ -496,11 +704,6 @@ export default function AdminPackagesPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            {packages.length === 0 && !loading && (
-              <Button variant="outline" size="sm" loading={seeding} onClick={handleSeed}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Seed Defaults
-              </Button>
-            )}
             <Button size="sm" onClick={() => setEditPkg('new')}>
               <Plus className="h-4 w-4 mr-1" /> Add Package
             </Button>
@@ -513,11 +716,6 @@ export default function AdminPackagesPage() {
             <strong>Load error:</strong> {loadError}
           </div>
         )}
-        {seedError && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            <strong>Seed error:</strong> {seedError}
-          </div>
-        )}
 
         {/* Package list */}
         {loading ? (
@@ -528,10 +726,10 @@ export default function AdminPackagesPage() {
               <PackageOpen className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 font-medium">No packages configured yet</p>
               <p className="text-slate-400 text-sm mt-1 mb-4">
-                Click "Seed Defaults" to load the pre-built packages, or add one manually.
+                Add your first package to make it available for booking.
               </p>
-              <Button size="sm" loading={seeding} onClick={handleSeed}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Seed Defaults
+              <Button size="sm" onClick={() => setEditPkg('new')}>
+                <Plus className="h-4 w-4 mr-1" /> Add Package
               </Button>
             </CardContent>
           </Card>

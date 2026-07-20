@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import * as admin from 'firebase-admin'
+import { FieldValue } from 'firebase-admin/firestore'
 import { verifyAuth, AuthRequest } from '../middleware/verifyAuth'
 import { requireAdmin } from '../middleware/requireAdmin'
 
@@ -119,7 +120,7 @@ router.post('/', verifyAuth, requireAdmin, async (req: AuthRequest, res: Respons
 
   try {
     const invoiceNumber = await nextInvoiceNumber()
-    const now = admin.firestore.FieldValue.serverTimestamp()
+    const now = FieldValue.serverTimestamp()
     const invoiceData = { ...parsed.data, invoiceNumber, createdAt: now, updatedAt: now }
     const ref = await admin.firestore().collection('invoices').add(invoiceData)
 

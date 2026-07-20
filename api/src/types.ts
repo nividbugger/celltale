@@ -58,6 +58,15 @@ export interface TestDoc {
   name: string
   sampleType?: SampleType
   cost?: number
+  machineCode?: string
+  category?: string
+  tubeColor?: string
+  parameters?: Array<{ parameter: string; unit: string; biologicalReference: string; machineCode?: string }>
+}
+
+export interface PackageSampleGroup {
+  label: string
+  testIds: string[]
 }
 
 /** Minimal shape of a `packages/{id}` doc needed by the services in this package. */
@@ -65,6 +74,7 @@ export interface PackageDoc {
   id: string
   name: string
   testIds: string[]
+  sampleGroups?: PackageSampleGroup[]
 }
 
 /** Minimal shape of an `appointments/{id}` doc needed by the services/routes in this package. */
@@ -76,6 +86,8 @@ export interface AppointmentDoc {
   packages: AppointmentPackageEntry[]
   manualTestIds: string[]
   resolvedTests: ResolvedTest[]
+  /** Frozen at confirm() from the packages' sampleGroups config. Absent = auto-group by sampleType. */
+  resolvedSampleGroups?: Array<{ label: string; testIds: string[]; sampleType: SampleType }>
   sampleIds: string[]
   /** Set while status === 'SamplesGenerating': the sample docs already reserved/decided for
    * this generation attempt, so a retry after a crash writes the SAME ids/content instead of
@@ -87,6 +99,10 @@ export interface AppointmentDoc {
    * resolvedTests[].cost wherever cost is computed (summary preview and confirm()). `null`
    * (or absent) means "use the computed sum," not "cost is zero." */
   costOverride?: number | null
+  /** Per-test tube colour assignment for manually added tests (testId → colour name like "Red").
+   * Set pre-confirm via POST /appointments/:id/manual-tube-colors. Used by the summary preview
+   * and frozen into resolvedSampleGroups at confirm() time. */
+  manualTubeColorMap?: Record<string, string>
   invoiceId?: string
   date: string
   timeSlot: string

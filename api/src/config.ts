@@ -31,6 +31,8 @@ export const config = {
    * local api/.env overriding APP_URL previously knocked the bare production
    * domain off this list for anyone who deployed with a differing value set.
    */
+  /** Shared secret for LIS middleware server-to-server auth (Bearer token) */
+  lisApiKey: (process.env.LIS_API_KEY ?? '').trim(),
   allowedOrigins: [
     'https://celltalediagnostics.com',
     'https://www.celltalediagnostics.com',
