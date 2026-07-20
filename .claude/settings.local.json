@@ -21,7 +21,8 @@
       "Bash(firebase projects:list)",
       "Bash(git check-ignore *)",
       "Bash(npx ts-node *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(git checkout *)"
     ]
   }
 }
