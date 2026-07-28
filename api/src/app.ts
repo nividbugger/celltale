@@ -7,6 +7,7 @@ import emailRouter from './routes/email'
 import paymentsRouter from './routes/payments'
 import adminPatientsRouter from './routes/adminPatients'
 import adminTestsRouter from './routes/adminTests'
+import adminParametersRouter from './routes/adminParameters'
 import adminInvoicesRouter from './routes/adminInvoices'
 import appointmentsRouter from './routes/appointments'
 import samplesRouter from './routes/samples'
@@ -29,8 +30,8 @@ app.use(helmet())
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow server-to-server calls (no origin header) in the Functions runtime.
-      if (!origin || config.allowedOrigins.includes(origin)) {
+      // Allow server-to-server calls (no origin header) and any localhost port in dev.
+      if (!origin || config.allowedOrigins.includes(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
         callback(null, true)
       } else {
         callback(new Error(`CORS: origin '${origin}' not allowed`))
@@ -59,6 +60,8 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
+  // The Functions emulator doesn't set req.ip; skip rate-limiting locally.
+  skip: () => process.env.FUNCTIONS_EMULATOR === 'true',
 })
 app.use(globalLimiter)
 
@@ -69,6 +72,7 @@ app.use('/api/email', emailRouter)
 app.use('/api/payments', paymentsRouter)
 app.use('/api/admin/patients', adminPatientsRouter)
 app.use('/api/admin/tests', adminTestsRouter)
+app.use('/api/admin/parameters', adminParametersRouter)
 app.use('/api/admin/invoices', adminInvoicesRouter)
 app.use('/api/appointments', appointmentsRouter)
 app.use('/api/samples', samplesRouter)

@@ -58,7 +58,6 @@ interface PackageFormData {
   price: number
   isPopular: boolean
   colorPreset: number
-  consultations: string
   summary: { value: string }[]
   testIds: string[]
 }
@@ -77,7 +76,6 @@ function toFormData(pkg: Package, presetIdx: number): PackageFormData {
     price: pkg.price,
     isPopular: pkg.isPopular,
     colorPreset: presetIdx,
-    consultations: pkg.consultations.join(', '),
     summary: pkg.summary.map((v) => ({ value: v })),
     testIds: pkg.testIds ?? [],
   }
@@ -113,10 +111,6 @@ function fromFormData(
     color: preset.color,
     headerColor: preset.headerColor,
     buttonColor: preset.buttonColor,
-    consultations: data.consultations
-      .split(',')
-      .map((c) => c.trim())
-      .filter(Boolean),
     summary: data.summary.map((s) => s.value).filter(Boolean),
     details: existingDetails,
     testIds: data.testIds,
@@ -158,7 +152,7 @@ function PackageForm({
 
   // ─── Tube-colour state ─────────────────────────────────────────────────
   const [customMode, setCustomMode] = useState<boolean>(
-    Boolean(pkg?.sampleGroups && pkg.sampleGroups.length > 0),
+    !pkg || Boolean(pkg?.sampleGroups && pkg.sampleGroups.length > 0),
   )
   const [testColorMap, setTestColorMap] = useState<Record<string, string>>(() =>
     initColorMap(pkg?.sampleGroups),
@@ -179,7 +173,6 @@ function PackageForm({
           price: 0,
           isPopular: false,
           colorPreset: 0,
-          consultations: 'Doctor, Dental, Eye',
           summary: [{ value: '' }],
           testIds: [],
         },
@@ -202,7 +195,7 @@ function PackageForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedTestIds.join(',')])
 
-  // When tests are removed, drop them from the colour map.
+  // Sync colour map with selected tests: drop removed tests, pre-populate newly added ones.
   useEffect(() => {
     if (!customMode) return
     setTestColorMap((prev) => {
@@ -210,6 +203,12 @@ function PackageForm({
       const next = { ...prev }
       for (const id of Object.keys(next)) {
         if (!selected.has(id)) delete next[id]
+      }
+      for (const testId of watchedTestIds) {
+        if (next[testId]) continue
+        const test = allTests.find((t) => t.id === testId)
+        const tc = test?.parameters.map((p) => p.tubeColor).find(Boolean)
+        if (tc) next[testId] = tc
       }
       return next
     })
@@ -222,12 +221,13 @@ function PackageForm({
       if (!enabled) {
         setTestColorMap({})
       } else {
-        // Pre-populate from each test's standard tubeColor; admin can still override.
+        // Pre-populate from each test's parameter tubeColors; admin can still override.
         setTestColorMap((prev) => {
           const next = { ...prev }
           for (const testId of watchedTestIds) {
             if (next[testId]) continue  // keep existing override
-            const tc = allTests.find((t) => t.id === testId)?.tubeColor
+            const test = allTests.find((t) => t.id === testId)
+            const tc = test?.parameters.map((p) => p.tubeColor).find(Boolean)
             if (tc) next[testId] = tc
           }
           return next
@@ -377,18 +377,6 @@ function PackageForm({
         >
           Preview: {watch('name') || 'Package Name'}
         </div>
-      </div>
-
-      {/* Consultations */}
-      <div>
-        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
-          Free Consultations (comma-separated)
-        </label>
-        <input
-          {...register('consultations')}
-          placeholder="Doctor, Dental, Eye"
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-        />
       </div>
 
       {/* Tests Included */}
@@ -681,6 +669,7 @@ export default function AdminPackagesPage() {
               <span className="text-teal-600 font-semibold">Packages</span>
               <a href="/admin/invoices" className="hover:text-slate-900">Invoices</a>
               <a href="/admin/tests" className="hover:text-slate-900">Tests</a>
+              <a href="/admin/parameters" className="hover:text-slate-900">Parameters</a>
             </nav>
           </div>
           <button

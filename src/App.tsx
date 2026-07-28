@@ -27,6 +27,7 @@ import AdminPackagesPage from './pages/admin/AdminPackagesPage'
 import AdminInvoicesPage from './pages/admin/AdminInvoicesPage'
 import AdminInvoiceEditorPage from './pages/admin/AdminInvoiceEditorPage'
 import TestsPage from './pages/admin/TestsPage'
+import ParametersPage from './pages/admin/ParametersPage'
 
 export default function App() {
   return (
@@ -159,6 +160,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <TestsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/parameters"
+            element={
+              <AdminRoute>
+                <ParametersPage />
               </AdminRoute>
             }
           />

@@ -60,8 +60,7 @@ export interface TestDoc {
   cost?: number
   machineCode?: string
   category?: string
-  tubeColor?: string
-  parameters?: Array<{ parameter: string; unit: string; biologicalReference: string; machineCode?: string }>
+  parameters?: Array<{ parameter: string; unit: string; biologicalReference: string; machineCode?: string; tubeColor?: string }>
 }
 
 export interface PackageSampleGroup {

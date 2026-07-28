@@ -9,7 +9,6 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
-import { PatientBarcodePrintModal } from '../../components/admin/PatientBarcodePrintModal'
 import { PatientDetailModal } from '../../components/admin/PatientDetailModal'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllPatients } from '../../lib/firestore'
@@ -150,11 +149,18 @@ function PatientForm({
           pattern: { value: /^\d+$/, message: 'Age must be a valid number' },
         })}
       />
-      <Input
-        label="Gender (optional)"
-        placeholder="e.g. Male, Female, Other"
-        {...register('gender')}
-      />
+      <div>
+        <label className="text-sm font-medium text-slate-700 block mb-1">Gender (optional)</label>
+        <select
+          {...register('gender')}
+          className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+        >
+          <option value="">Select gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
       <div>
         <label className="text-sm font-medium text-slate-700 block mb-1">Additional Information (optional)</label>
         <textarea
@@ -253,7 +259,6 @@ export default function AdminPatientsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [editPatient, setEditPatient] = useState<User | 'new' | null>(null)
-  const [showQRCode, setShowQRCode] = useState<User | null>(null)
   const [viewPatient, setViewPatient] = useState<User | null>(null)
   const [deletePatientTarget, setDeletePatient] = useState<User | null>(null)
 
@@ -286,7 +291,6 @@ export default function AdminPatientsPage() {
       return exists ? prev.map((p) => (p.uid === saved.uid ? saved : p)) : [saved, ...prev]
     })
     setEditPatient(null)
-    setShowQRCode(saved)
   }
 
   return (
@@ -312,6 +316,7 @@ export default function AdminPatientsPage() {
             { to: '/admin/packages', label: 'Packages' },
             { to: '/admin/invoices', label: 'Invoices' },
             { to: '/admin/tests', label: 'Tests' },
+            { to: '/admin/parameters', label: 'Parameters' },
           ].map((l) => (
             <Link
               key={l.to}
@@ -444,8 +449,6 @@ export default function AdminPatientsPage() {
           />
         )}
       </Modal>
-
-      {showQRCode && <PatientBarcodePrintModal isOpen={showQRCode !== null} onClose={() => setShowQRCode(null)} patient={showQRCode} />}
 
       {viewPatient && <PatientDetailModal isOpen={viewPatient !== null} onClose={() => setViewPatient(null)} patient={viewPatient} />}
 

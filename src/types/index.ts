@@ -20,14 +20,50 @@ export interface User {
   createdAt: Timestamp
 }
 
+// ─── Diagnostic Parameters ────────────────────────────────────────────────
+
+export interface DiagnosticParameter {
+  id: string
+  code: string
+  analyzer: string
+  loinc: string | null
+  name: string
+  discipline: string
+  tubeColor: string
+  additive: string
+  unit: string
+  refLow: number | null
+  refHigh: number | null
+  sex: 'ALL' | 'M' | 'F'
+  refText: string | null
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export function formatParameterRefRange(
+  p: Pick<DiagnosticParameter, 'refLow' | 'refHigh' | 'refText' | 'sex'>,
+): string {
+  if (p.refText) return p.refText
+  const lo = p.refLow !== null ? p.refLow : undefined
+  const hi = p.refHigh !== null ? p.refHigh : undefined
+  let range = ''
+  if (lo !== undefined && hi !== undefined) range = `${lo}–${hi}`
+  else if (lo !== undefined) range = `> ${lo}`
+  else if (hi !== undefined) range = `< ${hi}`
+  return p.sex !== 'ALL' ? `${range} (${p.sex})` : range
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────
 
 export type SampleType = 'blood' | 'urine' | 'stool' | 'swab' | 'other'
 
 export interface TestParameter {
+  parameterId?: string
   parameter: string
+  machineCode?: string
   unit: string
   biologicalReference: string
+  tubeColor?: string
 }
 
 export interface Test {
@@ -42,9 +78,6 @@ export interface Test {
   /** What specimen this test is run on. Optional only for legacy rows created before this
    * field existed — the migration backfills it to 'other'; every new test must set it. */
   sampleType?: SampleType
-  /** Standard phlebotomy tube colour for this test (e.g. "Lavender" for EDTA/CBC).
-   * Used to auto-populate package sample-tube assignments. */
-  tubeColor?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -194,7 +227,6 @@ export interface Package {
   color: string
   headerColor: string
   buttonColor: string
-  consultations: string[]
   summary: string[]
   details: PackageDetail[]
   testIds: string[]
@@ -215,7 +247,7 @@ export const PACKAGES: Package[] = [
     color: 'bg-white border-slate-200',
     headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Blood-CBC (17 Parameters)',
       'Thyroid (1 Parameter: TSH)',
@@ -244,7 +276,7 @@ export const PACKAGES: Package[] = [
     color: 'bg-blue-50 border-blue-200 shadow-blue-100',
     headerColor: 'text-blue-700',
     buttonColor: 'bg-blue-600 hover:bg-blue-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Blood-CBC (17 Parameters)',
       'Thyroid (3 Parameters: T3, T4, TSH)',
@@ -274,7 +306,7 @@ export const PACKAGES: Package[] = [
     color: 'bg-white border-slate-200',
     headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Anemia Profile (Iron, B12)',
       'Full Liver Profile (11 Parameters)',

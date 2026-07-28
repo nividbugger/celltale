@@ -6,7 +6,8 @@
   "scripts": {
     "migrate-lims": "ts-node migrate-lims.ts",
     "seed": "ts-node seed-emulator.ts",
-    "seed:prod-tests": "ts-node seed-prod-tests.ts"
+    "seed:prod-tests": "ts-node seed-prod-tests.ts",
+    "seed:prod-parameters": "ts-node seed-prod-parameters.ts"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0"

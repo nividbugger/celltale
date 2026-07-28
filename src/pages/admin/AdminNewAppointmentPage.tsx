@@ -15,7 +15,7 @@ import { TestPicker } from '../../components/admin/TestPicker'
 import { PackagePicker } from '../../components/admin/PackagePicker'
 import { SamplePrintModal } from '../../components/admin/SamplePrintModal'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllPatients, getAllTests } from '../../lib/firestore'
+import { getAllPatients, getActiveTests } from '../../lib/firestore'
 import { usePackages } from '../../hooks/usePackages'
 import {
   registerPatient,
@@ -64,7 +64,10 @@ function nearestTimeSlot(now: Date): string {
 
 // ─── Step 1: Patient ──────────────────────────────────────────────────────────
 
-function PatientStep({ onSelect }: { onSelect: (p: User) => void }) {
+function PatientStep({ onSelect }: { onSelect: (p: User, date: string, timeSlot: string) => void }) {
+  const now = new Date()
+  const [date, setDate] = useState(format(now, 'yyyy-MM-dd'))
+  const [timeSlot, setTimeSlot] = useState(nearestTimeSlot(now))
   const [patients, setPatients] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -100,7 +103,7 @@ function PatientStep({ onSelect }: { onSelect: (p: User) => void }) {
         email: record.email,
         role: 'patient',
         createdAt: null as unknown as User['createdAt'],
-      })
+      }, date, timeSlot)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to register patient')
     } finally {
@@ -110,6 +113,34 @@ function PatientStep({ onSelect }: { onSelect: (p: User) => void }) {
 
   return (
     <div className="space-y-4">
+      {/* Date & time slot — visible and editable, defaulted to today + nearest slot */}
+      <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-teal-700">Appointment Date &amp; Time</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Time Slot</label>
+            <select
+              value={timeSlot}
+              onChange={(e) => setTimeSlot(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            >
+              {TIME_SLOTS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <h2 className="font-bold text-slate-900">Search Existing Patient</h2>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -132,7 +163,7 @@ function PatientStep({ onSelect }: { onSelect: (p: User) => void }) {
             filtered.map((p) => (
               <button
                 key={p.uid}
-                onClick={() => onSelect(p)}
+                onClick={() => onSelect(p, date, timeSlot)}
                 className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50"
               >
                 <div>
@@ -184,31 +215,29 @@ function PatientStep({ onSelect }: { onSelect: (p: User) => void }) {
 }
 
 // ─── Step 2: Auto-create the appointment ─────────────────────────────────────
-// Walk-in patients are standing at the desk being collected right now — a date/time-slot
-// picker just re-asks something already true. Default to today, the nearest time slot to the
-// current wall-clock time, and the collection centre's own address; all three stay editable
-// later via PATCH /appointments/:id (pre-confirm) if a specific case genuinely needs it.
 
 function CreatingStep({
   patient,
+  date,
+  timeSlot,
   onCreated,
   onError,
 }: {
   patient: User
+  date: string
+  timeSlot: string
   onCreated: (appointmentId: string) => void
   onError: (message: string) => void
 }) {
   useEffect(() => {
-    const now = new Date()
     createAppointmentApi({
       patientId: patient.uid,
-      date: format(now, 'yyyy-MM-dd'),
-      timeSlot: nearestTimeSlot(now),
+      date,
+      timeSlot,
       collectionAddress: DEFAULT_COLLECTION_ADDRESS,
     })
       .then((appt) => onCreated(appt.id))
       .catch((err: unknown) => onError(err instanceof Error ? err.message : 'Failed to create appointment'))
-    // Runs once per mount — re-triggering on prop identity changes would create duplicate drafts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -271,7 +300,7 @@ function TestSelectionStep({
   const summaryLoaded = useRef(false)
 
   useEffect(() => {
-    getAllTests().then(setAllTests)
+    getActiveTests().then(setAllTests)
   }, [])
 
   async function refetchSummary() {
@@ -650,6 +679,8 @@ export default function AdminNewAppointmentPage() {
   const { appointmentId: resumeId } = useParams<{ appointmentId?: string }>()
   const [step, setStep] = useState<Step>(resumeId ? 'resuming' : 'patient')
   const [patient, setPatient] = useState<User | null>(null)
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTimeSlot, setScheduleTimeSlot] = useState('')
   const [appointmentId, setAppointmentId] = useState<string | null>(null)
   const [sampleIds, setSampleIds] = useState<string[]>([])
   const [printOpen, setPrintOpen] = useState(false)
@@ -724,8 +755,10 @@ export default function AdminNewAppointmentPage() {
 
         {step === 'patient' && (
           <PatientStep
-            onSelect={(p) => {
+            onSelect={(p, date, timeSlot) => {
               setPatient(p)
+              setScheduleDate(date)
+              setScheduleTimeSlot(timeSlot)
               setStep('creating')
             }}
           />
@@ -744,6 +777,8 @@ export default function AdminNewAppointmentPage() {
           ) : (
             <CreatingStep
               patient={patient}
+              date={scheduleDate}
+              timeSlot={scheduleTimeSlot}
               onCreated={(id) => {
                 setAppointmentId(id)
                 setStep('tests')

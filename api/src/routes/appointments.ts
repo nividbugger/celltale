@@ -48,57 +48,90 @@ async function getAllTestsById(ids: string[]): Promise<Map<string, TestDoc>> {
  * Computes the frozen sample-group list for an appointment from the packages' sampleGroups config.
  * Returns undefined when no package defines custom groups (fall back to auto-group by sampleType).
  */
-function computeResolvedSampleGroups(
-  packageEntries: AppointmentPackageEntry[],
-  packagesById: Map<string, PackageDoc>,
-  resolvedTests: ResolvedTest[],
-): Array<{ label: string; testIds: string[]; sampleType: SampleType }> | undefined {
-  const groups: Array<{ label: string; testIds: string[]; sampleType: SampleType }> = []
-
-  for (const entry of packageEntries) {
-    const pkg = packagesById.get(entry.packageId)
-    if (!pkg?.sampleGroups || pkg.sampleGroups.length === 0) continue
-
-    for (const group of pkg.sampleGroups) {
-      const groupTestIds = resolvedTests
-        .filter((rt) => rt.sourcePackageId === entry.packageId && group.testIds.includes(rt.testId))
-        .map((rt) => rt.testId)
-      if (groupTestIds.length === 0) continue
-
-      const sampleType: SampleType =
-        resolvedTests.find((rt) => rt.testId === groupTestIds[0])?.sampleType ?? 'blood'
-      groups.push({ label: group.label, testIds: groupTestIds, sampleType })
-    }
+/** Returns the first tubeColor found on any of the test's parameters (copied from the diagnostic parameter catalog). */
+function deriveParamTubeColor(test: TestDoc | undefined): string | undefined {
+  if (!test?.parameters) return undefined
+  for (const p of test.parameters) {
+    if (p.tubeColor) return p.tubeColor
   }
-
-  return groups.length > 0 ? groups : undefined
+  return undefined
 }
 
 /**
- * Builds explicit sample groups from the admin's per-test tube colour assignment for manually
- * added tests. Mirrors computeResolvedSampleGroups but operates on the manualTubeColorMap
- * instead of package sampleGroups config.
+ * Determines tube groups for an appointment using two sources of truth:
+ *
+ *  1. Package sampleGroups — if a package has explicit tube grouping configured, those groups
+ *     (whose label IS the tube color name) are used verbatim. Same-color groups from different
+ *     packages are merged into one tube so there is never more than one Red tube, etc.
+ *
+ *  2. Parameter-level tubeColor — for tests not covered by any package sampleGroup (manually
+ *     added tests, or tests in packages with no sampleGroups), the tube color is derived from
+ *     the first non-null tubeColor on the test's parameters (populated from DiagnosticParameter
+ *     when the test was built). An admin manual override (manualColorMap) takes precedence.
+ *
+ *  Tests with no color from either source fall back to one-per-sampleType grouping.
  */
-function buildManualTubeGroups(
-  manualTubeColorMap: Record<string, string> | undefined,
-  manualTestIds: string[],
+function buildColorConsolidatedGroups(
   resolvedTests: ResolvedTest[],
+  testDocsById: Map<string, TestDoc>,
+  packageEntries: AppointmentPackageEntry[],
+  packagesById: Map<string, PackageDoc>,
+  manualColorMap?: Record<string, string>,
 ): Array<{ label: string; testIds: string[]; sampleType: SampleType }> {
-  if (!manualTubeColorMap || Object.keys(manualTubeColorMap).length === 0) return []
-  const manualSet = new Set(manualTestIds)
-  const byColor = new Map<string, string[]>()
-  for (const [testId, colorName] of Object.entries(manualTubeColorMap)) {
-    if (!manualSet.has(testId) || !colorName) continue
-    const list = byColor.get(colorName) ?? []
-    list.push(testId)
-    byColor.set(colorName, list)
+  const byColor = new Map<string, { testIds: string[]; sampleType: SampleType }>()
+  const byType = new Map<SampleType, string[]>()
+  const covered = new Set<string>()
+
+  function addToColor(colorLabel: string, rt: ResolvedTest) {
+    const existing = byColor.get(colorLabel)
+    if (existing) {
+      existing.testIds.push(rt.testId)
+    } else {
+      byColor.set(colorLabel, { testIds: [rt.testId], sampleType: rt.sampleType })
+    }
   }
-  const groups: Array<{ label: string; testIds: string[]; sampleType: SampleType }> = []
-  for (const [colorName, testIds] of byColor.entries()) {
-    const sampleType = resolvedTests.find((rt) => testIds.includes(rt.testId))?.sampleType ?? 'blood'
-    groups.push({ label: colorName, testIds, sampleType })
+
+  // Pass 1: package sampleGroups — label IS the tube color; merge same-color groups across packages
+  for (const entry of packageEntries) {
+    const pkg = packagesById.get(entry.packageId)
+    if (!pkg?.sampleGroups || pkg.sampleGroups.length === 0) continue
+    for (const group of pkg.sampleGroups) {
+      const pkgTests = resolvedTests.filter(
+        (rt) => rt.sourcePackageId === entry.packageId && group.testIds.includes(rt.testId),
+      )
+      for (const rt of pkgTests) {
+        covered.add(rt.testId)
+        addToColor(group.label, rt)
+      }
+    }
   }
-  return groups
+
+  // Pass 2: remaining tests — manual override → parameter tubeColor → sampleType fallback
+  for (const rt of resolvedTests) {
+    if (covered.has(rt.testId)) continue
+    const effectiveColor =
+      manualColorMap?.[rt.testId] || deriveParamTubeColor(testDocsById.get(rt.testId))
+    if (effectiveColor) {
+      addToColor(effectiveColor, rt)
+    } else {
+      const list = byType.get(rt.sampleType)
+      if (list) list.push(rt.testId)
+      else byType.set(rt.sampleType, [rt.testId])
+    }
+  }
+
+  return [
+    ...Array.from(byColor.entries()).map(([colorName, { testIds, sampleType }]) => ({
+      label: colorName,
+      testIds,
+      sampleType,
+    })),
+    ...Array.from(byType.entries()).map(([sampleType, testIds]) => ({
+      label: sampleType as string,
+      testIds,
+      sampleType,
+    })),
+  ]
 }
 
 function respondAppointment(res: Response, status: number, appt: object): void {
@@ -377,6 +410,7 @@ router.get('/:id/summary', verifyAuth, asyncHandler(async (req: AuthRequest, res
   const packagesById = await getAllPackagesById(appt.packages.map((p) => p.packageId))
 
   let resolvedTests = appt.resolvedTests
+  let testDocsById = new Map<string, TestDoc>()
   if (EDITABLE_STATUSES.includes(appt.status)) {
     const allTestIds = Array.from(
       new Set([
@@ -384,50 +418,32 @@ router.get('/:id/summary', verifyAuth, asyncHandler(async (req: AuthRequest, res
         ...appt.manualTestIds,
       ]),
     )
-    const testsById = await getAllTestsById(allTestIds)
+    testDocsById = await getAllTestsById(allTestIds)
     resolvedTests = resolveTests(
       appt.packages.map((p) => p.packageId),
       appt.manualTestIds,
       Array.from(packagesById.values()),
-      Array.from(testsById.values()),
+      Array.from(testDocsById.values()),
     )
   }
 
   const samplesSnap = await db.collection('samples').where('appointmentId', '==', appt.id).get()
   const computedCost = resolvedTests.reduce((sum, t) => sum + t.cost, 0)
 
-  const previewSampleGroups = (() => {
-    if (!EDITABLE_STATUSES.includes(appt.status)) return undefined
-    const pkgGroups = computeResolvedSampleGroups(appt.packages, packagesById, resolvedTests)
-    const manualGroups = buildManualTubeGroups(appt.manualTubeColorMap, appt.manualTestIds, resolvedTests)
-    const all = [...(pkgGroups ?? []), ...manualGroups]
-    return all.length > 0 ? all : undefined
-  })()
+  const previewSampleGroups = EDITABLE_STATUSES.includes(appt.status) && resolvedTests.length > 0
+    ? buildColorConsolidatedGroups(resolvedTests, testDocsById, appt.packages, packagesById, appt.manualTubeColorMap)
+    : undefined
 
   const testNameMap = new Map(resolvedTests.map((rt) => [rt.testId, rt.name]))
   const sampleDrafts = EDITABLE_STATUSES.includes(appt.status) ? deriveSamples(resolvedTests, previewSampleGroups) : []
 
-  // These are the canonical color names that come from the manual tube color picker. Labels
-  // from package sampleGroups are free-text (e.g. "CBC Panel") and should NOT be treated as
-  // color names — only labels that exactly match a picker value are used for dot color.
-  const TUBE_COLOR_NAMES = new Set(['Red', 'Lavender', 'Grey', 'Black', 'Blue', 'Green', 'Yellow'])
-  // Build a lookup so we can fall back to a test's configured tubeColor for auto-mode tubes.
-  const testDocColorMap = new Map(
-    Array.from((await (async () => {
-      const testIds = sampleDrafts.flatMap((d) => d.testIds)
-      return getAllTestsById([...new Set(testIds)])
-    })()).entries()).map(([id, doc]) => [id, doc.tubeColor])
-  )
+  // Labels from colour groups are colour name strings; labels from sampleType fallback groups
+  // are sampleType values ('blood', 'urine', …). Use this to decide whether to show a colour dot.
+  const SAMPLE_TYPE_NAMES = new Set<string>(['blood', 'urine', 'stool', 'swab', 'other'])
 
   const samplePreviews = sampleDrafts.map((draft, i) => {
-    const groupLabel = previewSampleGroups && i < previewSampleGroups.length
-      ? previewSampleGroups[i].label
-      : undefined
-    // Prefer the label when it's a known color name (manual tube color mode). Fall back to
-    // the test document's configured tubeColor (auto mode with tubeColor set on the test).
-    const tubeColorName = (groupLabel && TUBE_COLOR_NAMES.has(groupLabel))
-      ? groupLabel
-      : (draft.testIds.length > 0 ? (testDocColorMap.get(draft.testIds[0]) ?? undefined) : undefined)
+    const groupLabel = previewSampleGroups?.[i]?.label
+    const tubeColorName = groupLabel && !SAMPLE_TYPE_NAMES.has(groupLabel) ? groupLabel : undefined
     return {
       sampleType: draft.sampleType,
       label: groupLabel,
@@ -567,9 +583,10 @@ router.post('/:id/confirm', verifyAuth, asyncHandler(async (req: AuthRequest, re
 
   const computedCost = resolvedTests.reduce((sum, t) => sum + t.cost, 0)
   const totalCost = appt.costOverride ?? computedCost
-  const pkgSampleGroups = computeResolvedSampleGroups(appt.packages, packagesById, resolvedTests)
-  const manualTubeGroups = buildManualTubeGroups(appt.manualTubeColorMap, appt.manualTestIds, resolvedTests)
-  const allSampleGroups = [...(pkgSampleGroups ?? []), ...manualTubeGroups]
+
+  const allSampleGroups = buildColorConsolidatedGroups(
+    resolvedTests, testsById, appt.packages, packagesById, appt.manualTubeColorMap,
+  )
   const resolvedSampleGroups = allSampleGroups.length > 0 ? allSampleGroups : undefined
 
   // For re-confirmation, delete stale sample docs before the new generation run

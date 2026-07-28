@@ -3,7 +3,7 @@
  * Run from the scripts/ directory: npx ts-node seed-emulator.ts
  *
  * Creates:
- *   - 1 admin user  (admin@celltale.dev / Admin@123)
+ *   - 1 admin user  (admin@celltale.dev / admin123)
  *   - 5 patients    (e.g. ravi@celltale.dev / Patient@123)
  *   - 8 lab tests
  *   - 3 packages
@@ -128,6 +128,120 @@ const TESTS: Record<string, object> = {
   },
 }
 
+// ─── Diagnostic Parameters ───────────────────────────────────────────────────
+// Source: diagnostic_parameter_catalog.json v1.0.0
+// "Yellow (urine cup)" normalised to "Yellow" (same colour, additive field clarifies context)
+
+const DIAGNOSTIC_PARAMETERS = [
+  { code: 'WBC',      analyzer: 'sysmex',  loinc: '6690-2',    name: 'White blood cell count',           discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 4.0,   refHigh: 11.0, sex: 'ALL', refText: null },
+  { code: 'RBC',      analyzer: 'sysmex',  loinc: '789-8',     name: 'Red blood cell count',             discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*6/uL',     refLow: 4.5,   refHigh: 5.9,  sex: 'M',   refText: null },
+  { code: 'RBC',      analyzer: 'sysmex',  loinc: '789-8',     name: 'Red blood cell count',             discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*6/uL',     refLow: 4.1,   refHigh: 5.1,  sex: 'F',   refText: null },
+  { code: 'HGB',      analyzer: 'sysmex',  loinc: '718-7',     name: 'Hemoglobin',                       discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'g/dL',        refLow: 13.5,  refHigh: 17.5, sex: 'M',   refText: null },
+  { code: 'HGB',      analyzer: 'sysmex',  loinc: '718-7',     name: 'Hemoglobin',                       discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'g/dL',        refLow: 12.0,  refHigh: 15.5, sex: 'F',   refText: null },
+  { code: 'HCT',      analyzer: 'sysmex',  loinc: '4544-3',    name: 'Hematocrit',                       discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 41.0,  refHigh: 53.0, sex: 'M',   refText: null },
+  { code: 'HCT',      analyzer: 'sysmex',  loinc: '4544-3',    name: 'Hematocrit',                       discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 36.0,  refHigh: 46.0, sex: 'F',   refText: null },
+  { code: 'MCV',      analyzer: 'sysmex',  loinc: '787-2',     name: 'Mean corpuscular volume',          discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'fL',          refLow: 80.0,  refHigh: 100.0,sex: 'ALL', refText: null },
+  { code: 'MCH',      analyzer: 'sysmex',  loinc: '785-6',     name: 'Mean corpuscular hemoglobin',      discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'pg',          refLow: 27.0,  refHigh: 33.0, sex: 'ALL', refText: null },
+  { code: 'MCHC',     analyzer: 'sysmex',  loinc: '786-4',     name: 'MCH concentration',                discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'g/dL',        refLow: 32.0,  refHigh: 36.0, sex: 'ALL', refText: null },
+  { code: 'RDW-SD',   analyzer: 'sysmex',  loinc: '21000-5',   name: 'RDW standard deviation',           discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'fL',          refLow: 37.0,  refHigh: 54.0, sex: 'ALL', refText: null },
+  { code: 'RDW-CV',   analyzer: 'sysmex',  loinc: '788-0',     name: 'RDW coefficient of variation',     discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 11.5,  refHigh: 14.5, sex: 'ALL', refText: null },
+  { code: 'PLT',      analyzer: 'sysmex',  loinc: '777-3',     name: 'Platelet count',                   discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 150.0, refHigh: 400.0,sex: 'ALL', refText: null },
+  { code: 'MPV',      analyzer: 'sysmex',  loinc: '32623-1',   name: 'Mean platelet volume',             discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'fL',          refLow: 7.5,   refHigh: 11.5, sex: 'ALL', refText: null },
+  { code: 'PDW',      analyzer: 'sysmex',  loinc: '32207-3',   name: 'Platelet distribution width',      discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: 'fL',          refLow: 9.0,   refHigh: 17.0, sex: 'ALL', refText: null },
+  { code: 'PCT',      analyzer: 'sysmex',  loinc: '51637-7',   name: 'Plateletcrit',                     discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 0.17,  refHigh: 0.35, sex: 'ALL', refText: null },
+  { code: 'P-LCR',    analyzer: 'sysmex',  loinc: '48386-7',   name: 'Platelet large cell ratio',        discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 13.0,  refHigh: 43.0, sex: 'ALL', refText: null },
+  { code: 'NEUT%',    analyzer: 'sysmex',  loinc: '770-8',     name: 'Neutrophils percent',               discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 40.0,  refHigh: 70.0, sex: 'ALL', refText: null },
+  { code: 'LYMPH%',   analyzer: 'sysmex',  loinc: '736-9',     name: 'Lymphocytes percent',               discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 20.0,  refHigh: 40.0, sex: 'ALL', refText: null },
+  { code: 'MONO%',    analyzer: 'sysmex',  loinc: '5905-5',    name: 'Monocytes percent',                 discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 2.0,   refHigh: 8.0,  sex: 'ALL', refText: null },
+  { code: 'EO%',      analyzer: 'sysmex',  loinc: '713-8',     name: 'Eosinophils percent',               discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 1.0,   refHigh: 4.0,  sex: 'ALL', refText: null },
+  { code: 'BASO%',    analyzer: 'sysmex',  loinc: '706-2',     name: 'Basophils percent',                 discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 0.0,   refHigh: 1.0,  sex: 'ALL', refText: null },
+  { code: 'NEUT#',    analyzer: 'sysmex',  loinc: '751-8',     name: 'Neutrophils absolute',              discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 2.0,   refHigh: 7.0,  sex: 'ALL', refText: null },
+  { code: 'LYMPH#',   analyzer: 'sysmex',  loinc: '731-0',     name: 'Lymphocytes absolute',              discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 1.0,   refHigh: 3.0,  sex: 'ALL', refText: null },
+  { code: 'MONO#',    analyzer: 'sysmex',  loinc: '742-7',     name: 'Monocytes absolute',                discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 0.2,   refHigh: 0.8,  sex: 'ALL', refText: null },
+  { code: 'EO#',      analyzer: 'sysmex',  loinc: '711-2',     name: 'Eosinophils absolute',              discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 0.02,  refHigh: 0.5,  sex: 'ALL', refText: null },
+  { code: 'BASO#',    analyzer: 'sysmex',  loinc: '704-7',     name: 'Basophils absolute',                discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 0.0,   refHigh: 0.1,  sex: 'ALL', refText: null },
+  { code: 'IG%',      analyzer: 'sysmex',  loinc: '71695-1',   name: 'Immature granulocytes percent',     discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 0.0,   refHigh: 0.5,  sex: 'ALL', refText: null },
+  { code: 'IG#',      analyzer: 'sysmex',  loinc: '53115-2',   name: 'Immature granulocytes absolute',    discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '10*3/uL',     refLow: 0.0,   refHigh: 0.03, sex: 'ALL', refText: null },
+  { code: 'MICROR',   analyzer: 'sysmex',  loinc: null,        name: 'Microcytic ratio',                  discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 0.0,   refHigh: 3.0,  sex: 'ALL', refText: null },
+  { code: 'MACROR',   analyzer: 'sysmex',  loinc: null,        name: 'Macrocytic ratio',                  discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 0.0,   refHigh: 5.0,  sex: 'ALL', refText: null },
+  { code: 'ESR',      analyzer: 'generic', loinc: '30341-2',   name: 'Erythrocyte sedimentation rate',    discipline: 'Hematology',     tubeColor: 'Black',      additive: 'Sodium citrate',          unit: 'mm/hr',       refLow: 0.0,   refHigh: 20.0, sex: 'ALL', refText: null },
+  { code: 'RETIC',    analyzer: 'generic', loinc: '17849-1',   name: 'Reticulocyte count',                discipline: 'Hematology',     tubeColor: 'Lavender',   additive: 'K2/K3 EDTA',              unit: '%',           refLow: 0.5,   refHigh: 2.5,  sex: 'ALL', refText: null },
+  { code: 'GLU',      analyzer: 'erba',    loinc: '1558-6',    name: 'Glucose (fasting)',                 discipline: 'Chemistry',      tubeColor: 'Grey',       additive: 'Sodium fluoride / K oxalate', unit: 'mg/dL',   refLow: 70.0,  refHigh: 100.0,sex: 'ALL', refText: null },
+  { code: 'GLUPP',    analyzer: 'erba',    loinc: '1521-4',    name: 'Glucose 2h postprandial',           discipline: 'Chemistry',      tubeColor: 'Grey',       additive: 'Sodium fluoride / K oxalate', unit: 'mg/dL',   refLow: 0.0,   refHigh: 140.0,sex: 'ALL', refText: null },
+  { code: 'BUN',      analyzer: 'erba',    loinc: '3094-0',    name: 'Urea nitrogen (BUN)',               discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 7.0,   refHigh: 20.0, sex: 'ALL', refText: null },
+  { code: 'CREA',     analyzer: 'erba',    loinc: '2160-0',    name: 'Creatinine',                        discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 0.7,   refHigh: 1.3,  sex: 'M',   refText: null },
+  { code: 'CREA',     analyzer: 'erba',    loinc: '2160-0',    name: 'Creatinine',                        discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 0.6,   refHigh: 1.1,  sex: 'F',   refText: null },
+  { code: 'UA',       analyzer: 'erba',    loinc: '3084-1',    name: 'Uric acid',                         discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 3.4,   refHigh: 7.0,  sex: 'M',   refText: null },
+  { code: 'UA',       analyzer: 'erba',    loinc: '3084-1',    name: 'Uric acid',                         discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 2.4,   refHigh: 6.0,  sex: 'F',   refText: null },
+  { code: 'NA',       analyzer: 'erba',    loinc: '2951-2',    name: 'Sodium',                            discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mmol/L',      refLow: 136.0, refHigh: 145.0,sex: 'ALL', refText: null },
+  { code: 'K',        analyzer: 'erba',    loinc: '2823-3',    name: 'Potassium',                         discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mmol/L',      refLow: 3.5,   refHigh: 5.1,  sex: 'ALL', refText: null },
+  { code: 'CL',       analyzer: 'erba',    loinc: '2075-0',    name: 'Chloride',                          discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mmol/L',      refLow: 98.0,  refHigh: 107.0,sex: 'ALL', refText: null },
+  { code: 'CO2',      analyzer: 'erba',    loinc: '1963-8',    name: 'Bicarbonate',                       discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mmol/L',      refLow: 22.0,  refHigh: 29.0, sex: 'ALL', refText: null },
+  { code: 'CA',       analyzer: 'erba',    loinc: '17861-6',   name: 'Calcium',                           discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 8.5,   refHigh: 10.5, sex: 'ALL', refText: null },
+  { code: 'PHOS',     analyzer: 'erba',    loinc: '2777-1',    name: 'Phosphorus',                        discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 2.5,   refHigh: 4.5,  sex: 'ALL', refText: null },
+  { code: 'MG',       analyzer: 'erba',    loinc: '19123-9',   name: 'Magnesium',                         discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 1.7,   refHigh: 2.2,  sex: 'ALL', refText: null },
+  { code: 'TP',       analyzer: 'erba',    loinc: '2885-2',    name: 'Total protein',                     discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'g/dL',        refLow: 6.4,   refHigh: 8.3,  sex: 'ALL', refText: null },
+  { code: 'ALB',      analyzer: 'erba',    loinc: '1751-7',    name: 'Albumin',                           discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'g/dL',        refLow: 3.5,   refHigh: 5.0,  sex: 'ALL', refText: null },
+  { code: 'GLOB',     analyzer: 'erba',    loinc: '10834-0',   name: 'Globulin (calculated)',             discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'g/dL',        refLow: 2.0,   refHigh: 3.5,  sex: 'ALL', refText: null },
+  { code: 'TBIL',     analyzer: 'erba',    loinc: '1975-2',    name: 'Total bilirubin',                   discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 0.1,   refHigh: 1.2,  sex: 'ALL', refText: null },
+  { code: 'DBIL',     analyzer: 'erba',    loinc: '1968-7',    name: 'Direct bilirubin',                  discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 0.0,   refHigh: 0.3,  sex: 'ALL', refText: null },
+  { code: 'AST',      analyzer: 'erba',    loinc: '1920-8',    name: 'AST (SGOT)',                        discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 10.0,  refHigh: 40.0, sex: 'ALL', refText: null },
+  { code: 'ALT',      analyzer: 'erba',    loinc: '1742-6',    name: 'ALT (SGPT)',                        discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 7.0,   refHigh: 56.0, sex: 'ALL', refText: null },
+  { code: 'ALP',      analyzer: 'erba',    loinc: '6768-6',    name: 'Alkaline phosphatase',              discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 44.0,  refHigh: 147.0,sex: 'ALL', refText: null },
+  { code: 'GGT',      analyzer: 'erba',    loinc: '2324-2',    name: 'Gamma GT',                          discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 8.0,   refHigh: 61.0, sex: 'M',   refText: null },
+  { code: 'GGT',      analyzer: 'erba',    loinc: '2324-2',    name: 'Gamma GT',                          discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 5.0,   refHigh: 36.0, sex: 'F',   refText: null },
+  { code: 'LDH',      analyzer: 'erba',    loinc: '14804-9',   name: 'Lactate dehydrogenase',             discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 140.0, refHigh: 280.0,sex: 'ALL', refText: null },
+  { code: 'AMY',      analyzer: 'erba',    loinc: '1798-8',    name: 'Amylase',                           discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 30.0,  refHigh: 110.0,sex: 'ALL', refText: null },
+  { code: 'LIP',      analyzer: 'erba',    loinc: '3040-3',    name: 'Lipase',                            discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 10.0,  refHigh: 140.0,sex: 'ALL', refText: null },
+  { code: 'CK',       analyzer: 'erba',    loinc: '2157-6',    name: 'Creatine kinase',                   discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 39.0,  refHigh: 308.0,sex: 'M',   refText: null },
+  { code: 'CK',       analyzer: 'erba',    loinc: '2157-6',    name: 'Creatine kinase',                   discipline: 'Chemistry',      tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/L',         refLow: 26.0,  refHigh: 192.0,sex: 'F',   refText: null },
+  { code: 'CHOL',     analyzer: 'erba',    loinc: '2093-3',    name: 'Total cholesterol',                 discipline: 'Lipids',         tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: null,  refHigh: 200.0,sex: 'ALL', refText: 'Desirable < 200' },
+  { code: 'TRIG',     analyzer: 'erba',    loinc: '2571-8',    name: 'Triglycerides',                     discipline: 'Lipids',         tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: null,  refHigh: 150.0,sex: 'ALL', refText: 'Desirable < 150' },
+  { code: 'HDL',      analyzer: 'erba',    loinc: '2085-9',    name: 'HDL cholesterol',                   discipline: 'Lipids',         tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 40.0,  refHigh: null, sex: 'ALL', refText: 'Desirable > 40' },
+  { code: 'LDL',      analyzer: 'erba',    loinc: '13457-7',   name: 'LDL cholesterol (calculated)',      discipline: 'Lipids',         tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: null,  refHigh: 100.0,sex: 'ALL', refText: 'Optimal < 100' },
+  { code: 'VLDL',     analyzer: 'erba',    loinc: '13458-5',   name: 'VLDL cholesterol (calculated)',     discipline: 'Lipids',         tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/dL',       refLow: 5.0,   refHigh: 40.0, sex: 'ALL', refText: null },
+  { code: 'HBA1C',    analyzer: 'generic', loinc: '4548-4',    name: 'Hemoglobin A1c',                    discipline: 'Diabetes',       tubeColor: 'Lavender',   additive: 'EDTA (whole blood)',       unit: '%',           refLow: null,  refHigh: 5.7,  sex: 'ALL', refText: 'Normal < 5.7' },
+  { code: 'INS',      analyzer: 'generic', loinc: '20448-7',   name: 'Insulin (fasting)',                 discipline: 'Diabetes',       tubeColor: 'Gold',       additive: 'SST',                     unit: 'uIU/mL',      refLow: 2.6,   refHigh: 24.9, sex: 'ALL', refText: null },
+  { code: 'CPEP',     analyzer: 'generic', loinc: '1986-9',    name: 'C-peptide',                         discipline: 'Diabetes',       tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: 1.1,   refHigh: 4.4,  sex: 'ALL', refText: null },
+  { code: 'TSH',      analyzer: 'generic', loinc: '3016-3',    name: 'TSH',                               discipline: 'Thyroid',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'uIU/mL',      refLow: 0.4,   refHigh: 4.0,  sex: 'ALL', refText: null },
+  { code: 'FT4',      analyzer: 'generic', loinc: '3024-7',    name: 'Free T4',                           discipline: 'Thyroid',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/dL',       refLow: 0.8,   refHigh: 1.8,  sex: 'ALL', refText: null },
+  { code: 'FT3',      analyzer: 'generic', loinc: '3051-0',    name: 'Free T3',                           discipline: 'Thyroid',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'pg/mL',       refLow: 2.3,   refHigh: 4.2,  sex: 'ALL', refText: null },
+  { code: 'T4',       analyzer: 'generic', loinc: '3026-2',    name: 'Total T4',                          discipline: 'Thyroid',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'ug/dL',       refLow: 4.5,   refHigh: 12.0, sex: 'ALL', refText: null },
+  { code: 'T3',       analyzer: 'generic', loinc: '3053-6',    name: 'Total T3',                          discipline: 'Thyroid',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/dL',       refLow: 80.0,  refHigh: 200.0,sex: 'ALL', refText: null },
+  { code: 'PT',       analyzer: 'generic', loinc: '5902-2',    name: 'Prothrombin time',                  discipline: 'Coagulation',    tubeColor: 'Light Blue', additive: 'Sodium citrate 3.2%',     unit: 'sec',         refLow: 11.0,  refHigh: 13.5, sex: 'ALL', refText: null },
+  { code: 'INR',      analyzer: 'generic', loinc: '6301-6',    name: 'INR',                               discipline: 'Coagulation',    tubeColor: 'Light Blue', additive: 'Sodium citrate 3.2%',     unit: 'ratio',       refLow: 0.8,   refHigh: 1.1,  sex: 'ALL', refText: null },
+  { code: 'APTT',     analyzer: 'generic', loinc: '3173-2',    name: 'Activated partial thromboplastin time', discipline: 'Coagulation', tubeColor: 'Light Blue', additive: 'Sodium citrate 3.2%',   unit: 'sec',         refLow: 25.0,  refHigh: 35.0, sex: 'ALL', refText: null },
+  { code: 'FIB',      analyzer: 'generic', loinc: '3255-7',    name: 'Fibrinogen',                        discipline: 'Coagulation',    tubeColor: 'Light Blue', additive: 'Sodium citrate 3.2%',     unit: 'mg/dL',       refLow: 200.0, refHigh: 400.0,sex: 'ALL', refText: null },
+  { code: 'DDIMER',   analyzer: 'generic', loinc: '48065-7',   name: 'D-dimer',                           discipline: 'Coagulation',    tubeColor: 'Light Blue', additive: 'Sodium citrate 3.2%',     unit: 'ng/mL FEU',   refLow: null,  refHigh: 500.0,sex: 'ALL', refText: 'Normal < 500' },
+  { code: 'TNI',      analyzer: 'generic', loinc: '10839-9',   name: 'Troponin I',                        discipline: 'Cardiac',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: null,  refHigh: 0.04, sex: 'ALL', refText: 'Normal < 0.04' },
+  { code: 'TNT',      analyzer: 'generic', loinc: '6598-7',    name: 'Troponin T',                        discipline: 'Cardiac',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: null,  refHigh: 0.01, sex: 'ALL', refText: 'Normal < 0.01' },
+  { code: 'CKMB',     analyzer: 'generic', loinc: '13969-1',   name: 'CK-MB',                             discipline: 'Cardiac',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: 0.0,   refHigh: 5.0,  sex: 'ALL', refText: null },
+  { code: 'BNP',      analyzer: 'generic', loinc: '30934-4',   name: 'BNP',                               discipline: 'Cardiac',        tubeColor: 'Lavender',   additive: 'EDTA (assay dependent, verify)', unit: 'pg/mL', refLow: null,  refHigh: 100.0,sex: 'ALL', refText: 'Normal < 100' },
+  { code: 'NTPROBNP', analyzer: 'generic', loinc: '33762-6',   name: 'NT-proBNP',                         discipline: 'Cardiac',        tubeColor: 'Gold',       additive: 'SST',                     unit: 'pg/mL',       refLow: null,  refHigh: 125.0,sex: 'ALL', refText: 'Normal < 125' },
+  { code: 'FE',       analyzer: 'generic', loinc: '2498-4',    name: 'Serum iron',                        discipline: 'Iron studies',   tubeColor: 'Gold',       additive: 'SST',                     unit: 'ug/dL',       refLow: 60.0,  refHigh: 170.0,sex: 'ALL', refText: null },
+  { code: 'FERR',     analyzer: 'generic', loinc: '2276-4',    name: 'Ferritin',                          discipline: 'Iron studies',   tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: 24.0,  refHigh: 336.0,sex: 'M',   refText: null },
+  { code: 'FERR',     analyzer: 'generic', loinc: '2276-4',    name: 'Ferritin',                          discipline: 'Iron studies',   tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: 11.0,  refHigh: 307.0,sex: 'F',   refText: null },
+  { code: 'TIBC',     analyzer: 'generic', loinc: '2500-7',    name: 'Total iron binding capacity',       discipline: 'Iron studies',   tubeColor: 'Gold',       additive: 'SST',                     unit: 'ug/dL',       refLow: 250.0, refHigh: 450.0,sex: 'ALL', refText: null },
+  { code: 'TSAT',     analyzer: 'generic', loinc: '2502-3',    name: 'Transferrin saturation',            discipline: 'Iron studies',   tubeColor: 'Gold',       additive: 'SST',                     unit: '%',           refLow: 20.0,  refHigh: 50.0, sex: 'ALL', refText: null },
+  { code: 'CRP',      analyzer: 'generic', loinc: '1988-5',    name: 'C-reactive protein',                discipline: 'Inflammatory',   tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/L',        refLow: null,  refHigh: 5.0,  sex: 'ALL', refText: 'Normal < 5' },
+  { code: 'HSCRP',    analyzer: 'generic', loinc: '30522-7',   name: 'High-sensitivity CRP',              discipline: 'Inflammatory',   tubeColor: 'Gold',       additive: 'SST',                     unit: 'mg/L',        refLow: null,  refHigh: 3.0,  sex: 'ALL', refText: 'Low risk < 1, average 1-3, high > 3' },
+  { code: 'VITD',     analyzer: 'generic', loinc: '1989-3',    name: 'Vitamin D 25-hydroxy',              discipline: 'Vitamins',       tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: 30.0,  refHigh: 100.0,sex: 'ALL', refText: 'Sufficient 30-100' },
+  { code: 'VITB12',   analyzer: 'generic', loinc: '2132-9',    name: 'Vitamin B12',                       discipline: 'Vitamins',       tubeColor: 'Gold',       additive: 'SST',                     unit: 'pg/mL',       refLow: 200.0, refHigh: 900.0,sex: 'ALL', refText: null },
+  { code: 'FOLATE',   analyzer: 'generic', loinc: '2284-8',    name: 'Folate (serum)',                    discipline: 'Vitamins',       tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: 3.0,   refHigh: 17.0, sex: 'ALL', refText: null },
+  { code: 'PSA',      analyzer: 'generic', loinc: '2857-1',    name: 'Prostate specific antigen',         discipline: 'Tumor markers',  tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: null,  refHigh: 4.0,  sex: 'M',   refText: 'Normal < 4' },
+  { code: 'CEA',      analyzer: 'generic', loinc: '2039-6',    name: 'Carcinoembryonic antigen',          discipline: 'Tumor markers',  tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: null,  refHigh: 3.0,  sex: 'ALL', refText: 'Non-smoker < 3' },
+  { code: 'AFP',      analyzer: 'generic', loinc: '1834-1',    name: 'Alpha-fetoprotein',                 discipline: 'Tumor markers',  tubeColor: 'Gold',       additive: 'SST',                     unit: 'ng/mL',       refLow: null,  refHigh: 10.0, sex: 'ALL', refText: 'Normal < 10' },
+  { code: 'CA125',    analyzer: 'generic', loinc: '10334-1',   name: 'CA 125',                            discipline: 'Tumor markers',  tubeColor: 'Gold',       additive: 'SST',                     unit: 'U/mL',        refLow: null,  refHigh: 35.0, sex: 'F',   refText: 'Normal < 35' },
+  { code: 'UPH',      analyzer: 'generic', loinc: '5803-2',    name: 'Urine pH',                          discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'pH',          refLow: 4.5,   refHigh: 8.0,  sex: 'ALL', refText: null },
+  { code: 'USG',      analyzer: 'generic', loinc: '5811-5',    name: 'Urine specific gravity',            discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'ratio',       refLow: 1.005, refHigh: 1.030,sex: 'ALL', refText: null },
+  { code: 'UPRO',     analyzer: 'generic', loinc: '5804-0',    name: 'Urine protein',                     discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'qual',        refLow: null,  refHigh: null, sex: 'ALL', refText: 'Negative' },
+  { code: 'UGLU',     analyzer: 'generic', loinc: '5792-7',    name: 'Urine glucose',                     discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'qual',        refLow: null,  refHigh: null, sex: 'ALL', refText: 'Negative' },
+  { code: 'UKET',     analyzer: 'generic', loinc: '5797-6',    name: 'Urine ketones',                     discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'qual',        refLow: null,  refHigh: null, sex: 'ALL', refText: 'Negative' },
+  { code: 'UBLD',     analyzer: 'generic', loinc: '5794-3',    name: 'Urine blood',                       discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'qual',        refLow: null,  refHigh: null, sex: 'ALL', refText: 'Negative' },
+  { code: 'ULEU',     analyzer: 'generic', loinc: '5799-2',    name: 'Urine leukocyte esterase',          discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'qual',        refLow: null,  refHigh: null, sex: 'ALL', refText: 'Negative' },
+  { code: 'UNIT',     analyzer: 'generic', loinc: '5802-4',    name: 'Urine nitrite',                     discipline: 'Urinalysis',     tubeColor: 'Yellow',     additive: 'None / boric acid',        unit: 'qual',        refLow: null,  refHigh: null, sex: 'ALL', refText: 'Negative' },
+]
+
 // ─── Packages ─────────────────────────────────────────────────────────────────
 
 const PACKAGES: Record<string, object> = {
@@ -136,7 +250,7 @@ const PACKAGES: Record<string, object> = {
     testIds: [TEST_IDS.cbc, TEST_IDS.tsh, TEST_IDS.rbs],
     color: 'bg-white border-slate-200', headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Blood-CBC (17 Parameters)', 'Thyroid (TSH)', 'Sugar (RBS)'],
     details: [],
   },
@@ -145,7 +259,7 @@ const PACKAGES: Record<string, object> = {
     testIds: [TEST_IDS.cbc, TEST_IDS.tsh, TEST_IDS.rbs, TEST_IDS.hba1c, TEST_IDS.lipid],
     color: 'bg-blue-50 border-blue-200', headerColor: 'text-blue-700',
     buttonColor: 'bg-blue-600 hover:bg-blue-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Blood-CBC', 'Thyroid (T3, T4, TSH)', 'HbA1c', 'Lipid Profile'],
     details: [],
   },
@@ -154,7 +268,7 @@ const PACKAGES: Record<string, object> = {
     testIds: [TEST_IDS.cbc, TEST_IDS.tsh, TEST_IDS.rbs, TEST_IDS.hba1c, TEST_IDS.lipid, TEST_IDS.lft, TEST_IDS.kft, TEST_IDS.urine],
     color: 'bg-white border-slate-200', headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Full Blood Panel', 'Liver & Kidney', 'Lipid + HbA1c', 'Urine Routine'],
     details: [],
   },
@@ -355,7 +469,7 @@ async function seed() {
 
   // Auth users
   console.log('Creating auth users...')
-  await createAuthUser('admin-seed', 'admin@celltale.dev',  'Admin@123',   'Admin',         undefined)
+  await createAuthUser('admin-seed', 'admin@celltale.dev',  'admin123',   'Admin',         undefined)
   await createAuthUser(PATIENT_IDS.ravi,   'ravi@celltale.dev',   'Patient@123', 'Ravi Kumar',    '+919876543210')
   await createAuthUser(PATIENT_IDS.priya,  'priya@celltale.dev',  'Patient@123', 'Priya Sharma',  '+919876543211')
   await createAuthUser(PATIENT_IDS.anand,  'anand@celltale.dev',  'Patient@123', 'Anand Patel',   '+919876543212')
@@ -375,11 +489,18 @@ async function seed() {
   const write = (col: string, id: string, data: object) => {
     batch.set(db.doc(`${col}/${id}`), {
       ...data,
-      ...(col === 'tests' || col === 'packages' ? {
+      ...(col === 'tests' || col === 'packages' || col === 'diagnosticParameters' ? {
         createdAt: ts(daysAgo(30)), updatedAt: ts(daysAgo(30)),
       } : {}),
     })
     console.log(`  firestore  ${col}/${id}`)
+  }
+
+  console.log(`\nWriting ${DIAGNOSTIC_PARAMETERS.length} diagnostic parameters...`)
+  for (let i = 0; i < DIAGNOSTIC_PARAMETERS.length; i++) {
+    const p = DIAGNOSTIC_PARAMETERS[i]
+    const docId = `param-${p.code.toLowerCase().replace(/[^a-z0-9]/g, '')}-${p.sex.toLowerCase()}-${i}`
+    write('diagnosticParameters', docId, p)
   }
 
   console.log('\nWriting tests...')
@@ -410,7 +531,7 @@ async function seed() {
 
   console.log('\n✓ Done!\n')
   console.log('─────────────────────────────────────────')
-  console.log('Admin login:    admin@celltale.dev  /  Admin@123')
+  console.log('Admin login:    admin@celltale.dev  /  admin123')
   console.log('Patient login:  ravi@celltale.dev   /  Patient@123')
   console.log('               (same password for all 5 patients)')
   console.log('─────────────────────────────────────────')

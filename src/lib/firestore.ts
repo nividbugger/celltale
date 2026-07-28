@@ -27,6 +27,7 @@ import type {
   ClinicSettings,
   Invoice,
   Test,
+  DiagnosticParameter,
 } from '../types'
 import { DEFAULT_CLINIC_SETTINGS } from '../types'
 
@@ -277,6 +278,29 @@ export async function updateInvoice(
 
 export async function deleteInvoice(id: string): Promise<void> {
   await deleteDoc(doc(db, 'invoices', id))
+}
+
+export async function getInvoiceByAppointmentId(appointmentId: string): Promise<Invoice | null> {
+  const q = query(collection(db, 'invoices'), where('appointmentId', '==', appointmentId), limit(1))
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  const d = snap.docs[0]
+  return { id: d.id, ...d.data() } as Invoice
+}
+
+export async function setAppointmentInvoiceId(appointmentId: string, invoiceId: string): Promise<void> {
+  await updateDoc(doc(db, 'appointments', appointmentId), { invoiceId })
+}
+
+// ─── Diagnostic Parameters ────────────────────────────────────────────────
+
+export async function getAllParameters(): Promise<DiagnosticParameter[]> {
+  const snap = await getDocs(collection(db, 'diagnosticParameters'))
+  const params = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as DiagnosticParameter)
+  return params.sort((a, b) => {
+    const dc = a.discipline.localeCompare(b.discipline)
+    return dc !== 0 ? dc : a.name.localeCompare(b.name)
+  })
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────

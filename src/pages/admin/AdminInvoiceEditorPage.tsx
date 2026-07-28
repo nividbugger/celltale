@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useForm, useFieldArray, useWatch } from 'react-hook-form'
 import { format } from 'date-fns'
-import { ArrowLeft, Plus, Trash2, Save, Printer } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Save, Printer, CalendarDays } from 'lucide-react'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { Button } from '../../components/ui/Button'
@@ -15,11 +15,13 @@ import {
   getNextInvoiceNumber,
   getClinicSettings,
   getAllTests,
+  getAppointmentById,
+  setAppointmentInvoiceId,
 } from '../../lib/firestore'
 import { buildInvoiceHtml, invoiceTotals, lineItemAmount } from '../../lib/invoiceHtml'
 import type { InvoiceDraft } from '../../lib/invoiceHtml'
 import { DEFAULT_CLINIC_SETTINGS } from '../../types'
-import type { ClinicSettings, Invoice, InvoiceLineItem, Test } from '../../types'
+import type { Appointment, ClinicSettings, Invoice, InvoiceLineItem, Test } from '../../types'
 
 interface InvoiceFormData {
   date: string
@@ -47,7 +49,7 @@ function defaultFormValues(): InvoiceFormData {
     billToName: '',
     billToContact: '',
     receivedAmount: 0,
-    lineItems: [BLANK_LINE_ITEM],
+    lineItems: [],
   }
 }
 
@@ -63,17 +65,22 @@ function formValuesFromInvoice(invoice: Invoice): InvoiceFormData {
 
 export default function AdminInvoiceEditorPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>()
+  const [searchParams] = useSearchParams()
+  const appointmentId = searchParams.get('appointmentId')
   const navigate = useNavigate()
   const isNew = invoiceId === 'new'
 
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [clinic, setClinic] = useState<ClinicSettings>(DEFAULT_CLINIC_SETTINGS)
   const [invoiceNumber, setInvoiceNumber] = useState<number | null>(null)
   const [invoiceDbId, setInvoiceDbId] = useState<string | null>(isNew ? null : invoiceId ?? null)
+  const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null)
   const [tests, setTests] = useState<Test[]>([])
 
-  const { register, control, handleSubmit, reset } = useForm<InvoiceFormData>({
+  const { register, control, handleSubmit, reset, formState: { errors } } = useForm<InvoiceFormData>({
     defaultValues: defaultFormValues(),
   })
 
@@ -82,25 +89,53 @@ export default function AdminInvoiceEditorPage() {
 
   useEffect(() => {
     async function load() {
-      const [clinicSettings, allTests] = await Promise.all([getClinicSettings(), getAllTests()])
-      setClinic(clinicSettings)
-      setTests(allTests)
+      try {
+        const [clinicSettings, allTests] = await Promise.all([getClinicSettings(), getAllTests()])
+        setClinic(clinicSettings)
+        setTests(allTests)
 
-      if (isNew) {
-        const nextNumber = await getNextInvoiceNumber()
-        setInvoiceNumber(nextNumber)
-      } else if (invoiceId) {
-        const invoice = await getInvoiceById(invoiceId)
-        if (invoice) {
-          setInvoiceNumber(invoice.invoiceNumber)
-          setInvoiceDbId(invoice.id)
-          reset(formValuesFromInvoice(invoice))
+        if (isNew) {
+          const nextNumber = await getNextInvoiceNumber()
+          setInvoiceNumber(nextNumber)
+
+          if (appointmentId) {
+            const appt = await getAppointmentById(appointmentId)
+            if (appt) {
+              setLinkedAppointment(appt)
+              reset({
+                date: format(new Date(), 'yyyy-MM-dd'),
+                billToName: appt.patientName,
+                billToContact: appt.patientPhone ?? '',
+                receivedAmount: 0,
+                lineItems: appt.resolvedTests.length > 0
+                  ? appt.resolvedTests.map((t) => ({
+                      itemName: t.name,
+                      hsnSac: '',
+                      quantity: 1,
+                      pricePerUnit: t.cost ?? 0,
+                      discountPercent: 0,
+                    }))
+                  : [],
+              })
+            }
+          }
+        } else if (invoiceId) {
+          const invoice = await getInvoiceById(invoiceId)
+          if (invoice) {
+            setInvoiceNumber(invoice.invoiceNumber)
+            setInvoiceDbId(invoice.id)
+            reset(formValuesFromInvoice(invoice))
+          }
         }
+      } catch (err) {
+        console.error('Failed to load invoice:', err)
+        setLoadError('Failed to load invoice data. Check Firestore rules and your connection.')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     load()
-  }, [invoiceId, isNew, reset])
+  }, [invoiceId, isNew, appointmentId, reset])
 
   const draftInvoice: InvoiceDraft = {
     id: invoiceDbId ?? '',
@@ -124,28 +159,36 @@ export default function AdminInvoiceEditorPage() {
   async function onSubmit(data: InvoiceFormData) {
     if (invoiceNumber === null) return
     setSaving(true)
+    setSaveError(null)
     try {
       const payload = {
         invoiceNumber,
         date: data.date,
         billToName: data.billToName,
-        billToContact: data.billToContact || undefined,
+        ...(data.billToContact ? { billToContact: data.billToContact } : {}),
         receivedAmount: Number(data.receivedAmount) || 0,
         lineItems: data.lineItems.map((item) => ({
           itemName: item.itemName,
-          hsnSac: item.hsnSac || undefined,
+          ...(item.hsnSac ? { hsnSac: item.hsnSac } : {}),
           quantity: Number(item.quantity) || 0,
           pricePerUnit: Number(item.pricePerUnit) || 0,
           discountPercent: Number(item.discountPercent) || 0,
         })),
+        ...(linkedAppointment ? { appointmentId: linkedAppointment.id, patientId: linkedAppointment.patientId } : {}),
       }
       if (invoiceDbId) {
         await updateInvoice(invoiceDbId, payload)
       } else {
         const newId = await createInvoice(payload)
         setInvoiceDbId(newId)
+        if (linkedAppointment) {
+          await setAppointmentInvoiceId(linkedAppointment.id, newId)
+        }
       }
       navigate('/admin/invoices')
+    } catch (err) {
+      console.error('Failed to save invoice:', err)
+      setSaveError('Failed to save invoice. Check your connection and try again.')
     } finally {
       setSaving(false)
     }
@@ -167,6 +210,17 @@ export default function AdminInvoiceEditorPage() {
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-5 text-red-700 max-w-md text-center">
+          <p className="font-semibold mb-1">Could not load invoice</p>
+          <p className="text-sm">{loadError}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <header className="bg-white border-b border-slate-100 sticky top-0 z-30">
@@ -182,6 +236,12 @@ export default function AdminInvoiceEditorPage() {
       </header>
 
       <main className="flex-1 mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-8">
+        {saveError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {saveError}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-extrabold text-slate-900">
@@ -192,10 +252,25 @@ export default function AdminInvoiceEditorPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            {linkedAppointment && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/admin/appointments?highlight=${linkedAppointment.id}`)}
+              >
+                <CalendarDays className="h-4 w-4 mr-1" /> View Appointment
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-1" /> Print / PDF
             </Button>
-            <Button size="sm" loading={saving} onClick={handleSubmit(onSubmit)}>
+            <Button
+              size="sm"
+              loading={saving}
+              onClick={handleSubmit(onSubmit, () =>
+                setSaveError('Please fill in all required fields before saving.'),
+              )}
+            >
               <Save className="h-4 w-4 mr-1" /> Save Invoice
             </Button>
           </div>
@@ -212,8 +287,11 @@ export default function AdminInvoiceEditorPage() {
                     <input
                       {...register('billToName', { required: true })}
                       placeholder="e.g. St Joseph english hr sec school"
-                      className={inputClass}
+                      className={`${inputClass} ${errors.billToName ? 'border-red-400 focus:ring-red-400' : ''}`}
                     />
+                    {errors.billToName && (
+                      <p className="text-xs text-red-500 mt-1">Required</p>
+                    )}
                   </div>
                   <div>
                     <label className={labelClass}>Contact No.</label>
@@ -224,10 +302,9 @@ export default function AdminInvoiceEditorPage() {
                     <input type="date" {...register('date', { required: true })} className={inputClass} />
                   </div>
                   <div>
-                    <label className={labelClass}>Received Amount (₹)</label>
+                    <label className={labelClass}>Advance Amount (₹)</label>
                     <input
                       type="number"
-                      step="0.01"
                       {...register('receivedAmount', { valueAsNumber: true, min: 0 })}
                       className={inputClass}
                     />
@@ -279,7 +356,25 @@ export default function AdminInvoiceEditorPage() {
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                {fields.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-6">
+                    Use <span className="font-semibold text-teal-600">+ Add from Test</span> above to add line items to this invoice.
+                  </p>
+                )}
+
+                {/* Table grid */}
+                {fields.length > 0 && (
+                <div className="grid grid-cols-[minmax(0,1fr)_3.75rem_2.5rem_4rem_3rem_5rem_2rem] gap-x-2">
+                  {/* Header */}
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase pb-1.5 border-b border-slate-200">Item Name</span>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase pb-1.5 border-b border-slate-200">HSN/SAC</span>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase pb-1.5 border-b border-slate-200 text-right">Qty</span>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase pb-1.5 border-b border-slate-200 text-right">Price (₹)</span>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase pb-1.5 border-b border-slate-200 text-right">Disc %</span>
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase pb-1.5 border-b border-slate-200 text-right">Amount</span>
+                  <span className="pb-1.5 border-b border-slate-200" />
+
+                  {/* Rows */}
                   {fields.map((field, i) => {
                     const item = formValues.lineItems?.[i]
                     const { amount } = lineItemAmount({
@@ -289,67 +384,54 @@ export default function AdminInvoiceEditorPage() {
                       pricePerUnit: Number(item?.pricePerUnit) || 0,
                       discountPercent: Number(item?.discountPercent) || 0,
                     })
+                    const rowInput = 'w-full rounded border border-slate-200 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500'
                     return (
-                      <div key={field.id} className="rounded-xl border border-slate-200 p-3 space-y-2">
-                        <div className="flex gap-2">
-                          <input
-                            {...register(`lineItems.${i}.itemName`, { required: true })}
-                            placeholder="Item name, e.g. Thyroid profile"
-                            className={`${inputClass} flex-1`}
-                          />
-                          <input
-                            {...register(`lineItems.${i}.hsnSac`)}
-                            placeholder="HSN/SAC"
-                            className={`${inputClass} w-24`}
-                          />
+                      <React.Fragment key={field.id}>
+                        <input
+                          {...register(`lineItems.${i}.itemName`, { required: true })}
+                          placeholder="Item name"
+                          className={`${rowInput} mt-2 ${errors.lineItems?.[i]?.itemName ? 'border-red-400 focus:ring-red-400' : ''}`}
+                        />
+                        <input
+                          {...register(`lineItems.${i}.hsnSac`)}
+                          placeholder="—"
+                          className={`${rowInput} mt-2`}
+                        />
+                        <input
+                          type="number"
+                          {...register(`lineItems.${i}.quantity`, { valueAsNumber: true, min: 0 })}
+                          className={`${rowInput} mt-2 text-right`}
+                        />
+                        <input
+                          type="number"
+                          {...register(`lineItems.${i}.pricePerUnit`, { valueAsNumber: true, min: 0 })}
+                          className={`${rowInput} mt-2 text-right`}
+                        />
+                        <input
+                          type="number"
+                          step={5}
+                          {...register(`lineItems.${i}.discountPercent`, { valueAsNumber: true, min: 0, max: 100 })}
+                          className={`${rowInput} mt-2 text-right`}
+                        />
+                        <div className="mt-2 flex items-center justify-end text-sm font-semibold text-slate-700">
+                          ₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="mt-2 flex items-center justify-center">
                           <button
                             type="button"
                             onClick={() => remove(i)}
-                            disabled={fields.length === 1}
-                            className="text-slate-400 hover:text-red-500 disabled:opacity-30 p-2 rounded-lg transition-colors"
+                            className="text-slate-300 hover:text-red-500 transition-colors"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        <div className="grid grid-cols-4 gap-2 items-end">
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-0.5">Qty</label>
-                            <input
-                              type="number"
-                              {...register(`lineItems.${i}.quantity`, { valueAsNumber: true, min: 0 })}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-0.5">Price/Unit (₹)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              {...register(`lineItems.${i}.pricePerUnit`, { valueAsNumber: true, min: 0 })}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-0.5">Discount (%)</label>
-                            <input
-                              type="number"
-                              {...register(`lineItems.${i}.discountPercent`, { valueAsNumber: true, min: 0, max: 100 })}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-400 block mb-0.5">Amount</label>
-                            <div className="rounded-lg bg-slate-50 px-2.5 py-2 text-sm font-semibold text-slate-700">
-                              ₹{amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      </React.Fragment>
                     )
                   })}
                 </div>
+                )}
 
-                <div className="mt-4 pt-4 border-t border-slate-100 space-y-1 text-sm">
+                {fields.length > 0 && <div className="mt-4 pt-4 border-t border-slate-100 space-y-1 text-sm">
                   <div className="flex justify-between text-slate-500">
                     <span>You Saved (total discount)</span>
                     <span>₹{totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
@@ -359,10 +441,14 @@ export default function AdminInvoiceEditorPage() {
                     <span>₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between text-slate-500">
+                    <span>Advance Amount</span>
+                    <span>₹{(Number(formValues.receivedAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-500">
                     <span>Balance</span>
                     <span>₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
-                </div>
+                </div>}
               </CardContent>
             </Card>
           </form>
