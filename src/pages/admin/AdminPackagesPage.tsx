@@ -58,7 +58,6 @@ interface PackageFormData {
   price: number
   isPopular: boolean
   colorPreset: number
-  consultations: string
   summary: { value: string }[]
   testIds: string[]
 }
@@ -77,7 +76,6 @@ function toFormData(pkg: Package, presetIdx: number): PackageFormData {
     price: pkg.price,
     isPopular: pkg.isPopular,
     colorPreset: presetIdx,
-    consultations: pkg.consultations.join(', '),
     summary: pkg.summary.map((v) => ({ value: v })),
     testIds: pkg.testIds ?? [],
   }
@@ -113,10 +111,6 @@ function fromFormData(
     color: preset.color,
     headerColor: preset.headerColor,
     buttonColor: preset.buttonColor,
-    consultations: data.consultations
-      .split(',')
-      .map((c) => c.trim())
-      .filter(Boolean),
     summary: data.summary.map((s) => s.value).filter(Boolean),
     details: existingDetails,
     testIds: data.testIds,
@@ -179,7 +173,6 @@ function PackageForm({
           price: 0,
           isPopular: false,
           colorPreset: 0,
-          consultations: 'Doctor, Dental, Eye',
           summary: [{ value: '' }],
           testIds: [],
         },
@@ -213,7 +206,8 @@ function PackageForm({
       }
       for (const testId of watchedTestIds) {
         if (next[testId]) continue
-        const tc = allTests.find((t) => t.id === testId)?.tubeColor
+        const test = allTests.find((t) => t.id === testId)
+        const tc = test?.parameters.map((p) => p.tubeColor).find(Boolean)
         if (tc) next[testId] = tc
       }
       return next
@@ -227,12 +221,13 @@ function PackageForm({
       if (!enabled) {
         setTestColorMap({})
       } else {
-        // Pre-populate from each test's standard tubeColor; admin can still override.
+        // Pre-populate from each test's parameter tubeColors; admin can still override.
         setTestColorMap((prev) => {
           const next = { ...prev }
           for (const testId of watchedTestIds) {
             if (next[testId]) continue  // keep existing override
-            const tc = allTests.find((t) => t.id === testId)?.tubeColor
+            const test = allTests.find((t) => t.id === testId)
+            const tc = test?.parameters.map((p) => p.tubeColor).find(Boolean)
             if (tc) next[testId] = tc
           }
           return next
@@ -382,18 +377,6 @@ function PackageForm({
         >
           Preview: {watch('name') || 'Package Name'}
         </div>
-      </div>
-
-      {/* Consultations */}
-      <div>
-        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
-          Free Consultations (comma-separated)
-        </label>
-        <input
-          {...register('consultations')}
-          placeholder="Doctor, Dental, Eye"
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-        />
       </div>
 
       {/* Tests Included */}

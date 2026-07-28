@@ -15,19 +15,16 @@ interface TestParameter {
   tubeColor?: string
 }
 
-const VALID_TUBE_COLORS = ['Red', 'Lavender', 'Grey', 'Black', 'Blue', 'Green', 'Yellow'] as const
-
 interface TestInput {
   name: string
   parameters: TestParameter[]
   cost?: number
-  tubeColor?: string
   machineCode?: string
   category?: string
 }
 
 function parseTestInput(body: unknown): { data: TestInput } | { error: string } {
-  const { name, parameters, cost, tubeColor, machineCode, category } = (body ?? {}) as Record<string, unknown>
+  const { name, parameters, cost, machineCode, category } = (body ?? {}) as Record<string, unknown>
 
   if (typeof name !== 'string' || !name.trim()) {
     return { error: 'name is required' }
@@ -61,14 +58,6 @@ function parseTestInput(body: unknown): { data: TestInput } | { error: string } 
     parsedCost = cost
   }
 
-  let parsedTubeColor: string | undefined
-  if (tubeColor !== undefined && tubeColor !== null && tubeColor !== '') {
-    if (typeof tubeColor !== 'string' || !(VALID_TUBE_COLORS as readonly string[]).includes(tubeColor)) {
-      return { error: `tubeColor must be one of: ${VALID_TUBE_COLORS.join(', ')}` }
-    }
-    parsedTubeColor = tubeColor
-  }
-
   let parsedMachineCode: string | undefined
   if (machineCode !== undefined && machineCode !== null && machineCode !== '') {
     if (typeof machineCode !== 'string') return { error: 'machineCode must be a string' }
@@ -84,14 +73,17 @@ function parseTestInput(body: unknown): { data: TestInput } | { error: string } 
   return {
     data: {
       name: name.trim(),
-      parameters: parameters.map((p: any) => ({
-        parameter: p.parameter.trim(),
-        ...(p.machineCode?.trim() ? { machineCode: p.machineCode.trim() } : {}),
-        unit: p.unit.trim(),
-        biologicalReference: p.biologicalReference.trim(),
+      // Preserve parameterId and tubeColor — they come from the DiagnosticParameter catalog
+      // and must survive the round-trip so tube grouping can derive colors from parameters.
+      parameters: (parameters as any[]).map((p) => ({
+        ...(p.parameterId ? { parameterId: String(p.parameterId) } : {}),
+        parameter: String(p.parameter).trim(),
+        ...(p.machineCode?.trim ? { machineCode: String(p.machineCode).trim() } : {}),
+        unit: String(p.unit).trim(),
+        biologicalReference: String(p.biologicalReference).trim(),
+        ...(p.tubeColor ? { tubeColor: String(p.tubeColor) } : {}),
       })),
       ...(parsedCost !== undefined ? { cost: parsedCost } : {}),
-      ...(parsedTubeColor !== undefined ? { tubeColor: parsedTubeColor } : {}),
       ...(parsedMachineCode !== undefined ? { machineCode: parsedMachineCode } : {}),
       ...(parsedCategory !== undefined ? { category: parsedCategory } : {}),
     },
@@ -114,16 +106,8 @@ router.post('/', verifyAuth, requireAdmin, async (req: AuthRequest, res) => {
     const testData = {
       testId,
       name: parsed.data.name,
-      parameters: parsed.data.parameters.map((p: any) => ({
-        ...(p.parameterId ? { parameterId: p.parameterId } : {}),
-        parameter: p.parameter || '',
-        ...(p.machineCode ? { machineCode: p.machineCode } : {}),
-        unit: p.unit || '',
-        biologicalReference: p.biologicalReference || '',
-        ...(p.tubeColor ? { tubeColor: p.tubeColor } : {}),
-      })),
+      parameters: parsed.data.parameters,
       ...(parsed.data.cost !== undefined ? { cost: parsed.data.cost } : {}),
-      ...(parsed.data.tubeColor !== undefined ? { tubeColor: parsed.data.tubeColor } : {}),
       ...(parsed.data.machineCode !== undefined ? { machineCode: parsed.data.machineCode } : {}),
       ...(parsed.data.category !== undefined ? { category: parsed.data.category } : {}),
       isActive: true,
@@ -156,16 +140,9 @@ router.patch('/:testId', verifyAuth, requireAdmin, async (req: AuthRequest, res)
     const now = FieldValue.serverTimestamp()
     const updateData = {
       name: parsed.data.name,
-      parameters: parsed.data.parameters.map((p: any) => ({
-        ...(p.parameterId ? { parameterId: p.parameterId } : {}),
-        parameter: p.parameter || '',
-        ...(p.machineCode ? { machineCode: p.machineCode } : {}),
-        unit: p.unit || '',
-        biologicalReference: p.biologicalReference || '',
-        ...(p.tubeColor ? { tubeColor: p.tubeColor } : {}),
-      })),
+      parameters: parsed.data.parameters,
       cost: parsed.data.cost !== undefined ? parsed.data.cost : FieldValue.delete(),
-      tubeColor: parsed.data.tubeColor !== undefined ? parsed.data.tubeColor : FieldValue.delete(),
+      tubeColor: FieldValue.delete(),
       machineCode: parsed.data.machineCode !== undefined ? parsed.data.machineCode : FieldValue.delete(),
       category: parsed.data.category !== undefined ? parsed.data.category : FieldValue.delete(),
       updatedAt: now,

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ChevronDown,
   ChevronUp,
@@ -16,6 +16,11 @@ import {
   Truck,
   PackageCheck,
   Pencil,
+  Receipt,
+  Upload,
+  XCircle,
+  FilePlus,
+  FileCheck,
 } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/Badge'
@@ -155,18 +160,96 @@ function CollectSamplesModal({
   )
 }
 
+// ─── Icon button helpers ──────────────────────────────────────────────────────
+
+function IconBtn({
+  label, onClick, loading, disabled, danger, teal, children,
+}: {
+  label: string
+  onClick?: () => void
+  loading?: boolean
+  disabled?: boolean
+  danger?: boolean
+  teal?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative group">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled || loading}
+        className={`p-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+          danger
+            ? 'border-red-200 text-red-400 hover:text-red-600 hover:bg-red-50'
+            : teal
+            ? 'border-teal-200 text-teal-600 hover:text-teal-800 hover:bg-teal-50'
+            : 'border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+        }`}
+      >
+        {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : children}
+      </button>
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap rounded bg-slate-800 px-2 py-0.5 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity z-50">
+        {label}
+      </span>
+    </div>
+  )
+}
+
+function IconLink({
+  label, to, danger, teal, green, children,
+}: {
+  label: string
+  to: string
+  danger?: boolean
+  teal?: boolean
+  green?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="relative group">
+      <Link
+        to={to}
+        className={`p-1.5 rounded-lg border transition-colors inline-flex items-center ${
+          danger
+            ? 'border-red-200 text-red-400 hover:text-red-600 hover:bg-red-50'
+            : teal
+            ? 'border-teal-200 text-teal-600 hover:text-teal-800 hover:bg-teal-50'
+            : green
+            ? 'border-green-200 text-green-600 hover:text-green-800 hover:bg-green-50'
+            : 'border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+        }`}
+      >
+        {children}
+      </Link>
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap rounded bg-slate-800 px-2 py-0.5 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity z-50">
+        {label}
+      </span>
+    </div>
+  )
+}
+
 // ─── Appointment row ──────────────────────────────────────────────────────────
 
 function AppointmentRow({
   appt,
   clinic,
   onUpdate,
+  initialExpanded,
 }: {
   appt: Appointment
   clinic: ClinicSettings
   onUpdate: () => void
+  initialExpanded?: boolean
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(initialExpanded ?? false)
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (initialExpanded && rowRef.current) {
+      rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [initialExpanded])
   const [advancing, setAdvancing] = useState(false)
   const [actionError, setActionError] = useState('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
@@ -246,59 +329,19 @@ function AppointmentRow({
   function renderPrimaryAction() {
     switch (appt.status) {
       case 'Created':
-        // An appointment can land here with nothing selected yet (e.g. the walk-in wizard's
-        // schedule step created it but test selection was never finished) — confirming would
-        // just fail server-side with "select at least one package or test," so route back into
-        // the picker instead of offering a button that's guaranteed to error.
         if (appt.packages.length === 0 && appt.manualTestIds.length === 0) {
-          return (
-            <Link to={`/admin/appointments/new/${appt.id}`}>
-              <Button size="sm" variant="outline">
-                <Plus className="h-3.5 w-3.5 mr-1" /> Select Tests
-              </Button>
-            </Link>
-          )
+          return <IconLink label="Select Tests" to={`/admin/appointments/new/${appt.id}`} teal><Plus className="h-4 w-4" /></IconLink>
         }
-        return (
-          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
-            await confirmAppointment(appt.id)
-            await generateSamples(appt.id)
-          })}>
-            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirm &amp; Generate Samples
-          </Button>
-        )
+        return <IconBtn label="Confirm & Generate Samples" teal loading={advancing} onClick={() => withAction(async () => { await confirmAppointment(appt.id); await generateSamples(appt.id) })}><CheckCircle className="h-4 w-4" /></IconBtn>
       case 'Confirmed':
       case 'SamplesGenerating':
-        return (
-          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
-            await generateSamples(appt.id)
-          })}>
-            <FlaskConical className="h-3.5 w-3.5 mr-1" /> Generate Samples
-          </Button>
-        )
-
+        return <IconBtn label="Generate Samples" teal loading={advancing} onClick={() => withAction(async () => { await generateSamples(appt.id) })}><FlaskConical className="h-4 w-4" /></IconBtn>
       case 'SamplesGenerated':
-        return (
-          <Button size="sm" onClick={() => setCollectOpen(true)}>
-            <PackageCheck className="h-3.5 w-3.5 mr-1" /> Collect Samples
-          </Button>
-        )
+        return <IconBtn label="Collect Samples" teal onClick={() => setCollectOpen(true)}><PackageCheck className="h-4 w-4" /></IconBtn>
       case 'SamplesCollected':
-        return (
-          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
-            await setAppointmentStatus(appt.id, 'InLaboratory')
-          })}>
-            <Truck className="h-3.5 w-3.5 mr-1" /> Send to Lab
-          </Button>
-        )
+        return <IconBtn label="Send to Lab" teal loading={advancing} onClick={() => withAction(async () => { await setAppointmentStatus(appt.id, 'InLaboratory') })}><Truck className="h-4 w-4" /></IconBtn>
       case 'ReportUploaded':
-        return (
-          <Button size="sm" loading={advancing} onClick={() => withAction(async () => {
-            await setAppointmentStatus(appt.id, 'Completed')
-          })}>
-            <ClipboardCheck className="h-3.5 w-3.5 mr-1" /> Mark Complete
-          </Button>
-        )
+        return <IconBtn label="Mark Complete" teal loading={advancing} onClick={() => withAction(async () => { await setAppointmentStatus(appt.id, 'Completed') })}><CheckCircle className="h-4 w-4" /></IconBtn>
       default:
         return null
     }
@@ -340,6 +383,7 @@ function AppointmentRow({
 
   return (
     <>
+      <div ref={rowRef}>
       <Card>
         <CardContent className="py-4">
           <div className="flex items-start justify-between gap-3">
@@ -354,80 +398,64 @@ function AppointmentRow({
               <p className="text-slate-400 text-xs">{appt.patientPhone}</p>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            <div className="flex items-center gap-0.5 shrink-0">
+              {/* Workflow progression */}
               {renderPrimaryAction()}
 
+              {/* Barcodes */}
+              {appt.status !== 'Created' && appt.status !== 'Deleted' && (
+                <IconBtn label="Barcodes" onClick={() => setPrintOpen(true)}><Barcode className="h-4 w-4" /></IconBtn>
+              )}
+
+              {/* Report actions */}
               {canGenerateReport && (
                 <>
-                  <Link to={`/admin/upload-report/${appt.id}`}>
-                    <Button size="sm" variant="outline">Upload Report</Button>
-                  </Link>
-                  <Link to={`/admin/generate-report/${appt.id}`}>
-                    <Button size="sm" variant="outline">
-                      <ClipboardCheck className="h-3.5 w-3.5 mr-1" /> Generate Report
-                    </Button>
-                  </Link>
+                  <IconLink label="Upload Report" to={`/admin/upload-report/${appt.id}`}><Upload className="h-4 w-4" /></IconLink>
+                  <IconLink label="Generate Report" to={`/admin/generate-report/${appt.id}`}><ClipboardCheck className="h-4 w-4" /></IconLink>
                 </>
               )}
-
               {canViewReport && (
-                <Button size="sm" onClick={handleViewReport}>
-                  <Eye className="h-3.5 w-3.5 mr-1" /> View Report
-                </Button>
+                <IconBtn label="View Report" onClick={handleViewReport}><Eye className="h-4 w-4" /></IconBtn>
               )}
 
+              {/* Invoice */}
+              {appt.status !== 'Created' && appt.status !== 'Cancelled' && appt.status !== 'Deleted' && (
+                appt.invoiceId
+                  ? <IconLink label="View Invoice" to={`/admin/invoices/${appt.invoiceId}`} green><Eye className="h-3.5 w-3.5" /><Receipt className="h-3.5 w-3.5" /></IconLink>
+                  : <IconLink label="Create Invoice" to={`/admin/invoices/new?appointmentId=${appt.id}`} teal><Plus className="h-3.5 w-3.5" /><Receipt className="h-3.5 w-3.5" /></IconLink>
+              )}
+
+              {/* Edit Tests */}
               {(appt.status === 'Confirmed' || appt.status === 'SamplesGenerating' || appt.status === 'SamplesGenerated') && (
-                <Link to={`/admin/appointments/new/${appt.id}`}>
-                  <Button size="sm" variant="outline">
-                    <FlaskConical className="h-3.5 w-3.5 mr-1" /> Edit Tests
-                  </Button>
-                </Link>
+                <IconLink label="Edit Tests" to={`/admin/appointments/new/${appt.id}`}><FlaskConical className="h-4 w-4" /></IconLink>
               )}
 
+              {/* Edit appointment */}
               {canEdit && (
-                <Button size="sm" variant="outline" onClick={() => {
+                <IconBtn label="Edit" onClick={() => {
                   setEditDate(appt.date)
                   setEditTimeSlot(appt.timeSlot)
                   setEditAddress(appt.collectionAddress)
                   setEditNotes(appt.notes ?? '')
                   setEditError('')
                   setEditOpen(true)
-                }}>
-                  <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-                </Button>
+                }}><Pencil className="h-4 w-4" /></IconBtn>
               )}
 
-              {appt.status !== 'Created' && appt.status !== 'Deleted' && (
-                <Button size="sm" variant="outline" onClick={() => setPrintOpen(true)}>
-                  <Barcode className="h-3.5 w-3.5 mr-1" /> Barcodes
-                </Button>
-              )}
-
+              {/* Cancel */}
               {canCancel && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                  onClick={() => withAction(async () => { await cancelAppointment(appt.id) })}
-                >
-                  Cancel
-                </Button>
+                <IconBtn label="Cancel" danger onClick={() => withAction(async () => { await cancelAppointment(appt.id) })}><XCircle className="h-4 w-4" /></IconBtn>
               )}
 
+              {/* Delete */}
               {appt.status !== 'Deleted' && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                <IconBtn label="Delete" danger onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="h-4 w-4" /></IconBtn>
               )}
 
+              {/* Expand */}
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100"
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors ml-1"
               >
                 {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
@@ -470,6 +498,7 @@ function AppointmentRow({
           )}
         </CardContent>
       </Card>
+      </div>
 
       <Modal isOpen={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} title="Delete Appointment">
         <div className="space-y-4">
@@ -639,10 +668,21 @@ export default function AdminAppointmentsPage() {
   const [mainTab, setMainTab] = useState<MainTab>('active')
   const [subFilter, setSubFilter] = useState<AppointmentStatus | 'All'>('All')
   const [clinic, setClinic] = useState<ClinicSettings>(DEFAULT_CLINIC_SETTINGS)
+  const [searchParams] = useSearchParams()
+  const highlightId = searchParams.get('highlight') ?? undefined
 
   useEffect(() => {
     getClinicSettings().then(setClinic)
   }, [])
+
+  useEffect(() => {
+    if (!highlightId || appointments.length === 0) return
+    const appt = appointments.find((a) => a.id === highlightId)
+    if (!appt) return
+    if (appt.status === 'Completed') setMainTab('completed')
+    else if (appt.status === 'Deleted') setMainTab('deleted')
+    else { setMainTab('active'); setSubFilter('All') }
+  }, [highlightId, appointments])
 
   const activeAppointments = appointments.filter((a) => a.status !== 'Completed' && a.status !== 'Deleted')
   const completedAppointments = appointments.filter((a) => a.status === 'Completed')
@@ -800,7 +840,7 @@ export default function AdminAppointmentsPage() {
         ) : (
           <div className="space-y-3">
             {displayed.map((appt) => (
-              <AppointmentRow key={appt.id} appt={appt} clinic={clinic} onUpdate={refetch} />
+              <AppointmentRow key={appt.id} appt={appt} clinic={clinic} onUpdate={refetch} initialExpanded={appt.id === highlightId} />
             ))}
           </div>
         )}

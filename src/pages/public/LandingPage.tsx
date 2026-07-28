@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { CheckCircle, Clock, Award, ArrowRight, Star, FlaskConical, Stethoscope } from 'lucide-react'
+import { CheckCircle, Clock, Award, ArrowRight, Star, FlaskConical } from 'lucide-react'
 import { Navbar } from '../../components/layout/Navbar'
 import { Footer } from '../../components/layout/Footer'
 import { Button } from '../../components/ui/Button'
@@ -144,15 +144,6 @@ export default function LandingPage() {
                     <div className="text-3xl font-extrabold text-slate-900 mb-4">
                       ₹{pkg.price}
                       <span className="text-sm font-normal text-slate-500 ml-1">/ person</span>
-                    </div>
-
-                    {/* Consultations */}
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {pkg.consultations.map((c) => (
-                        <span key={c} className="inline-flex items-center gap-1 text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200 rounded-full px-2.5 py-0.5">
-                          <Stethoscope className="h-3 w-3" /> {c}
-                        </span>
-                      ))}
                     </div>
 
                     {/* Summary */}

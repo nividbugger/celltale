@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FileText, Plus, Pencil, Trash2, Printer, Settings2, Receipt } from 'lucide-react'
+import { FileText, Plus, Pencil, Trash2, Printer, Settings2, Receipt, CalendarDays } from 'lucide-react'
 import { format } from 'date-fns'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
@@ -160,6 +160,16 @@ export default function AdminInvoicesPage() {
                         <p className="text-slate-400 text-xs">{invoice.lineItems.length} items</p>
                       </div>
                       <div className="flex gap-2 shrink-0">
+                        {invoice.appointmentId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            title="View linked appointment"
+                            onClick={() => navigate(`/admin/appointments?highlight=${invoice.appointmentId}`)}
+                          >
+                            <CalendarDays className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => handlePrint(invoice)}>
                           <Printer className="h-3.5 w-3.5" />
                         </Button>

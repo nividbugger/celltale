@@ -78,9 +78,6 @@ export interface Test {
   /** What specimen this test is run on. Optional only for legacy rows created before this
    * field existed — the migration backfills it to 'other'; every new test must set it. */
   sampleType?: SampleType
-  /** Standard phlebotomy tube colour for this test (e.g. "Lavender" for EDTA/CBC).
-   * Used to auto-populate package sample-tube assignments. */
-  tubeColor?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -230,7 +227,6 @@ export interface Package {
   color: string
   headerColor: string
   buttonColor: string
-  consultations: string[]
   summary: string[]
   details: PackageDetail[]
   testIds: string[]
@@ -251,7 +247,7 @@ export const PACKAGES: Package[] = [
     color: 'bg-white border-slate-200',
     headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Blood-CBC (17 Parameters)',
       'Thyroid (1 Parameter: TSH)',
@@ -280,7 +276,7 @@ export const PACKAGES: Package[] = [
     color: 'bg-blue-50 border-blue-200 shadow-blue-100',
     headerColor: 'text-blue-700',
     buttonColor: 'bg-blue-600 hover:bg-blue-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Blood-CBC (17 Parameters)',
       'Thyroid (3 Parameters: T3, T4, TSH)',
@@ -310,7 +306,7 @@ export const PACKAGES: Package[] = [
     color: 'bg-white border-slate-200',
     headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Anemia Profile (Iron, B12)',
       'Full Liver Profile (11 Parameters)',

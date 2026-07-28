@@ -280,6 +280,18 @@ export async function deleteInvoice(id: string): Promise<void> {
   await deleteDoc(doc(db, 'invoices', id))
 }
 
+export async function getInvoiceByAppointmentId(appointmentId: string): Promise<Invoice | null> {
+  const q = query(collection(db, 'invoices'), where('appointmentId', '==', appointmentId), limit(1))
+  const snap = await getDocs(q)
+  if (snap.empty) return null
+  const d = snap.docs[0]
+  return { id: d.id, ...d.data() } as Invoice
+}
+
+export async function setAppointmentInvoiceId(appointmentId: string, invoiceId: string): Promise<void> {
+  await updateDoc(doc(db, 'appointments', appointmentId), { invoiceId })
+}
+
 // ─── Diagnostic Parameters ────────────────────────────────────────────────
 
 export async function getAllParameters(): Promise<DiagnosticParameter[]> {

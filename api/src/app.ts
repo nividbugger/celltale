@@ -30,8 +30,8 @@ app.use(helmet())
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow server-to-server calls (no origin header) in the Functions runtime.
-      if (!origin || config.allowedOrigins.includes(origin)) {
+      // Allow server-to-server calls (no origin header) and any localhost port in dev.
+      if (!origin || config.allowedOrigins.includes(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
         callback(null, true)
       } else {
         callback(new Error(`CORS: origin '${origin}' not allowed`))
@@ -60,6 +60,8 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
+  // The Functions emulator doesn't set req.ip; skip rate-limiting locally.
+  skip: () => process.env.FUNCTIONS_EMULATOR === 'true',
 })
 app.use(globalLimiter)
 

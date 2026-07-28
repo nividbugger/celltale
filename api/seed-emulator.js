@@ -97,7 +97,7 @@ const PACKAGES = {
     testIds: [T.cbc, T.tsh, T.rbs],
     color: 'bg-white border-slate-200', headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Blood-CBC (17 Parameters)', 'Thyroid (TSH)', 'Sugar (RBS)', 'Vitals (6)'],
     details: [],
   },
@@ -107,7 +107,7 @@ const PACKAGES = {
     testIds: [T.cbc, T.tsh, T.rbs, T.hba1c, T.lipid],
     color: 'bg-blue-50 border-blue-200', headerColor: 'text-blue-700',
     buttonColor: 'bg-blue-600 hover:bg-blue-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Blood-CBC (17 Parameters)', 'Thyroid (T3, T4, TSH)', 'HbA1c + Lipid Profile', 'Sugar (RBS)'],
     details: [],
   },
@@ -117,7 +117,7 @@ const PACKAGES = {
     testIds: [T.cbc, T.tsh, T.rbs, T.hba1c, T.lipid, T.lft, T.kft, T.urine],
     color: 'bg-white border-slate-200', headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Full Blood Panel', 'Liver & Kidney Function', 'Lipid + HbA1c', 'Urine Routine'],
     details: [],
   },

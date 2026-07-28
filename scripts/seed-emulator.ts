@@ -250,7 +250,7 @@ const PACKAGES: Record<string, object> = {
     testIds: [TEST_IDS.cbc, TEST_IDS.tsh, TEST_IDS.rbs],
     color: 'bg-white border-slate-200', headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Blood-CBC (17 Parameters)', 'Thyroid (TSH)', 'Sugar (RBS)'],
     details: [],
   },
@@ -259,7 +259,7 @@ const PACKAGES: Record<string, object> = {
     testIds: [TEST_IDS.cbc, TEST_IDS.tsh, TEST_IDS.rbs, TEST_IDS.hba1c, TEST_IDS.lipid],
     color: 'bg-blue-50 border-blue-200', headerColor: 'text-blue-700',
     buttonColor: 'bg-blue-600 hover:bg-blue-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Blood-CBC', 'Thyroid (T3, T4, TSH)', 'HbA1c', 'Lipid Profile'],
     details: [],
   },
@@ -268,7 +268,7 @@ const PACKAGES: Record<string, object> = {
     testIds: [TEST_IDS.cbc, TEST_IDS.tsh, TEST_IDS.rbs, TEST_IDS.hba1c, TEST_IDS.lipid, TEST_IDS.lft, TEST_IDS.kft, TEST_IDS.urine],
     color: 'bg-white border-slate-200', headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: ['Full Blood Panel', 'Liver & Kidney', 'Lipid + HbA1c', 'Urine Routine'],
     details: [],
   },

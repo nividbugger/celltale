@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { Beaker, Search, Plus, Pencil, Trash2, X, FlaskConical } from 'lucide-react'
-import { TUBE_COLORS, PRIMARY_TUBE_COLORS, EXTRA_TUBE_COLORS } from '../../lib/tubeColors'
+import { TUBE_COLORS } from '../../lib/tubeColors'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { Modal } from '../../components/ui/Modal'
@@ -160,7 +160,6 @@ function ParameterPickerModal({
 interface TestFormData {
   name: string
   cost: string
-  tubeColor: string
 }
 
 function TestForm({
@@ -191,20 +190,12 @@ function TestForm({
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<TestFormData>({
     defaultValues: test
-      ? {
-          name: test.name,
-          cost: test.cost != null ? String(test.cost) : '',
-          tubeColor: test.tubeColor ?? '',
-        }
-      : { name: '', cost: '', tubeColor: '' },
+      ? { name: test.name, cost: test.cost != null ? String(test.cost) : '' }
+      : { name: '', cost: '' },
   })
-
-  const watchedColor = watch('tubeColor')
 
   // IDs of already-selected parameters (to grey them out in the picker)
   const selectedParamIds = new Set(
@@ -244,7 +235,6 @@ function TestForm({
         }
       }
 
-      const tubeColor = data.tubeColor || undefined
       const category = (categoryMode === 'custom' ? customCategory.trim() : selectedCategory) || undefined
 
       if (isNew) {
@@ -253,7 +243,6 @@ function TestForm({
           category,
           parameters: selectedParams,
           cost,
-          tubeColor,
         })
         if (!isActive) await toggleTestActive(result.id, false)
         const now = new Date()
@@ -264,7 +253,6 @@ function TestForm({
           category: result.category,
           parameters: result.parameters,
           cost: result.cost,
-          tubeColor: result.tubeColor,
           isActive,
           createdAt: { toDate: () => now } as any,
           updatedAt: { toDate: () => now } as any,
@@ -275,7 +263,6 @@ function TestForm({
           category: category ?? null,
           parameters: selectedParams,
           cost,
-          tubeColor: tubeColor ?? null,
         })
         if (isActive !== (test.isActive !== false)) await toggleTestActive(test.id, isActive)
         const now = new Date()
@@ -286,7 +273,6 @@ function TestForm({
           category: result.category,
           parameters: result.parameters,
           cost: result.cost,
-          tubeColor: result.tubeColor,
           isActive,
           createdAt: test.createdAt,
           updatedAt: { toDate: () => now } as any,
@@ -375,58 +361,6 @@ function TestForm({
           step="0.01"
           {...register('cost')}
         />
-
-        {/* Tube colour */}
-        <div>
-          <label className="text-sm font-medium text-slate-700 block mb-2">
-            Standard Tube Colour
-            <span className="text-slate-400 font-normal ml-1 text-xs">(used to auto-assign tests in packages)</span>
-          </label>
-          <div className="flex items-center gap-2 flex-wrap">
-            {PRIMARY_TUBE_COLORS.map((c) => (
-              <button
-                key={c.name}
-                type="button"
-                title={c.name}
-                onClick={() => setValue('tubeColor', watchedColor === c.name ? '' : c.name)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
-                  watchedColor === c.name
-                    ? `${c.badge} ${c.border} border-2 shadow-sm`
-                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'
-                }`}
-              >
-                <span className={`w-3 h-3 rounded-full flex-shrink-0 ${c.dot}`} />
-                {c.name}
-              </button>
-            ))}
-            <span className="w-px h-5 bg-slate-200 mx-1" />
-            {EXTRA_TUBE_COLORS.map((c) => (
-              <button
-                key={c.name}
-                type="button"
-                title={c.name}
-                onClick={() => setValue('tubeColor', watchedColor === c.name ? '' : c.name)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
-                  watchedColor === c.name
-                    ? `${c.badge} ${c.border} border-2 shadow-sm`
-                    : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'
-                }`}
-              >
-                <span className={`w-3 h-3 rounded-full flex-shrink-0 ${c.dot}`} />
-                {c.name}
-              </button>
-            ))}
-            {watchedColor && (
-              <button
-                type="button"
-                onClick={() => setValue('tubeColor', '')}
-                className="text-xs text-slate-400 hover:text-red-500 ml-1 transition-colors"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
 
         {/* Parameters */}
         <div>
@@ -704,7 +638,7 @@ export default function TestsPage() {
               <tbody className="divide-y divide-slate-50">
                 {filtered.map((test) => {
                   const isActive = test.isActive !== false
-                  const tc = TUBE_COLORS.find((c) => c.name === test.tubeColor)
+                  const paramColors = [...new Set(test.parameters.map((p) => p.tubeColor).filter(Boolean) as string[])]
                   const catColor = CATEGORY_COLORS[test.category ?? ''] ?? 'bg-slate-100 text-slate-600'
                   return (
                     <tr key={test.id} className={`hover:bg-slate-50 ${!isActive ? 'opacity-50' : ''}`}>
@@ -735,11 +669,18 @@ export default function TestsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {tc ? (
-                          <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${tc.badge}`}>
-                            <span className={`w-2 h-2 rounded-full ${tc.dot}`} />
-                            {tc.name}
-                          </span>
+                        {paramColors.length > 0 ? (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {paramColors.map((c) => {
+                              const tc = TUBE_COLORS.find((t) => t.name === c)
+                              return tc ? (
+                                <span key={c} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${tc.badge}`}>
+                                  <span className={`w-2 h-2 rounded-full ${tc.dot}`} />
+                                  {tc.name}
+                                </span>
+                              ) : null
+                            })}
+                          </div>
                         ) : (
                           <span className="text-slate-300 text-xs">—</span>
                         )}
