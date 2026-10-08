@@ -65,6 +65,7 @@ export default function AdminDashboardPage() {
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
             { to: '/admin/invoices', label: 'Invoices' },
+            { to: '/admin/bulk-invoices', label: 'Bulk Invoices' },
             { to: '/admin/tests', label: 'Tests' },
             { to: '/admin/parameters', label: 'Parameters' },
           ].map((l) => (

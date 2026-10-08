@@ -85,7 +85,7 @@ function PatientStep({ onSelect }: { onSelect: (p: User, date: string, timeSlot:
   const filtered = patients.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.phone.includes(search) ||
+      (p.phone ?? '').includes(search) ||
       (p.email ?? '').toLowerCase().includes(search.toLowerCase()),
   )
 

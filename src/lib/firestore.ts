@@ -26,6 +26,7 @@ import type {
   Package,
   ClinicSettings,
   Invoice,
+  BulkInvoice,
   Test,
   DiagnosticParameter,
 } from '../types'
@@ -290,6 +291,51 @@ export async function getInvoiceByAppointmentId(appointmentId: string): Promise<
 
 export async function setAppointmentInvoiceId(appointmentId: string, invoiceId: string): Promise<void> {
   await updateDoc(doc(db, 'appointments', appointmentId), { invoiceId })
+}
+
+export async function markInvoicePaid(id: string): Promise<void> {
+  await updateDoc(doc(db, 'invoices', id), {
+    isPaid: true,
+    paidAt: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+// ─── Bulk Invoices ───────────────────────────────────────────────────────────
+
+export async function getAllBulkInvoices(): Promise<BulkInvoice[]> {
+  const snap = await getDocs(collection(db, 'bulkInvoices'))
+  const invoices = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BulkInvoice)
+  return invoices.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+export async function markBulkInvoicePaid(id: string): Promise<void> {
+  await updateDoc(doc(db, 'bulkInvoices', id), {
+    isPaid: true,
+    paidAt: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function deleteBulkInvoice(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'bulkInvoices', id))
+}
+
+export async function getAppointmentsByPatientIds(patientIds: string[]): Promise<Appointment[]> {
+  if (patientIds.length === 0) return []
+  const chunks: string[][] = []
+  for (let i = 0; i < patientIds.length; i += 30) {
+    chunks.push(patientIds.slice(i, i + 30))
+  }
+  const results: Appointment[] = []
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const q = query(collection(db, 'appointments'), where('patientId', 'in', chunk))
+      const snap = await getDocs(q)
+      snap.docs.forEach((d) => results.push({ id: d.id, ...d.data() } as Appointment))
+    }),
+  )
+  return results.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
 }
 
 // ─── Diagnostic Parameters ────────────────────────────────────────────────

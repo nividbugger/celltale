@@ -16,7 +16,7 @@ function toE164(phone: string): string {
 
 interface PatientInput {
   name: string
-  phone: string
+  phone: string | null
   email: string | null
   company: string | null
   age: number | null
@@ -36,7 +36,7 @@ function parsePatientInput(
       return { error: 'name is required' }
     }
   }
-  if (requireFields || phone !== undefined) {
+  if (phone !== undefined && phone !== null && phone !== '') {
     if (typeof phone !== 'string' || !PHONE_REGEX.test(phone)) {
       return { error: 'phone must be a valid 10-digit Indian mobile number' }
     }
@@ -62,7 +62,7 @@ function parsePatientInput(
   return {
     data: {
       name: typeof name === 'string' ? name.trim() : '',
-      phone: typeof phone === 'string' ? phone : '',
+      phone: typeof phone === 'string' && phone ? phone : null,
       email: (email as string) || null,
       company: (company as string)?.trim() || null,
       age: (age as number) || null,
@@ -89,31 +89,38 @@ router.post(
       return
     }
     const { name, phone, email, company } = parsed.data
-    const phoneNumber = toE164(phone)
 
-    try {
-      await admin.auth().getUserByPhoneNumber(phoneNumber)
-      res.status(409).json({ error: 'A patient with this phone number is already registered' })
-      return
-    } catch (err) {
-      if ((err as { code?: string }).code !== 'auth/user-not-found') {
-        console.error('[POST /api/admin/patients] getUserByPhoneNumber failed', err)
-        res.status(500).json({ error: 'Internal server error' })
-        return
+    // Determine whether this phone can be used as a Firebase Auth identifier.
+    // Institute patients often share a contact number; if the phone is already
+    // claimed by another Auth user, we still create this patient but store the
+    // phone only in Firestore (for contact info) without attaching it to Auth.
+    let usePhoneForAuth = !!phone
+    if (phone) {
+      const phoneNumber = toE164(phone)
+      try {
+        await admin.auth().getUserByPhoneNumber(phoneNumber)
+        // Phone already taken — store for contact but skip Auth phone
+        usePhoneForAuth = false
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'auth/user-not-found') {
+          console.error('[POST /api/admin/patients] getUserByPhoneNumber failed', err)
+          res.status(500).json({ error: 'Internal server error' })
+          return
+        }
       }
     }
 
     try {
       const authUser = await admin.auth().createUser({
-        phoneNumber,
         displayName: name,
+        ...(usePhoneForAuth && phone ? { phoneNumber: toE164(phone) } : {}),
         ...(email ? { email } : {}),
       })
 
       const userDoc: any = {
         uid: authUser.uid,
         name,
-        phone,
+        phone: phone ?? '',
         email: email ?? '',
         collectionTimestamp: FieldValue.serverTimestamp(),
         role: 'patient' as const,
@@ -168,7 +175,7 @@ router.patch(
       return
     }
 
-    if (hasPhone && parsed.data.phone !== existing.data()?.phone) {
+    if (hasPhone && parsed.data.phone && parsed.data.phone !== existing.data()?.phone) {
       const phoneNumber = toE164(parsed.data.phone)
       try {
         const conflicting = await admin.auth().getUserByPhoneNumber(phoneNumber)

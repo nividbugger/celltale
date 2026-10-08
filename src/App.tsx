@@ -26,6 +26,7 @@ import AdminPatientsPage from './pages/admin/AdminPatientsPage'
 import AdminPackagesPage from './pages/admin/AdminPackagesPage'
 import AdminInvoicesPage from './pages/admin/AdminInvoicesPage'
 import AdminInvoiceEditorPage from './pages/admin/AdminInvoiceEditorPage'
+import AdminBulkInvoicesPage from './pages/admin/AdminBulkInvoicesPage'
 import TestsPage from './pages/admin/TestsPage'
 import ParametersPage from './pages/admin/ParametersPage'
 
@@ -152,6 +153,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminInvoiceEditorPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/bulk-invoices"
+            element={
+              <AdminRoute>
+                <AdminBulkInvoicesPage />
               </AdminRoute>
             }
           />

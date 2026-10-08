@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { Users, Search, UserPlus, Pencil, Eye, Trash2, AlertTriangle } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
@@ -29,11 +29,13 @@ interface PatientFormData {
 function PatientForm({
   patient,
   companyOptions,
+  companyPhones,
   onSave,
   onCancel,
 }: {
   patient: User | null
   companyOptions: string[]
+  companyPhones: Map<string, string>
   onSave: (p: User) => void
   onCancel: () => void
 }) {
@@ -43,12 +45,14 @@ function PatientForm({
   const {
     register,
     handleSubmit,
+    setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<PatientFormData>({
     defaultValues: patient
       ? {
           name: patient.name,
-          phone: patient.phone,
+          phone: patient.phone ?? '',
           email: patient.email ?? '',
           company: patient.company ?? '',
           age: patient.age ? String(patient.age) : '',
@@ -57,6 +61,16 @@ function PatientForm({
         }
       : { name: '', phone: '', email: '', company: '', age: '', gender: '', additionalInfo: '' },
   })
+
+  const selectedCompany = useWatch({ control, name: 'company' })
+
+  useEffect(() => {
+    if (!isNew) return
+    const institutePhone = companyPhones.get(selectedCompany?.trim() ?? '')
+    if (institutePhone) {
+      setValue('phone', institutePhone, { shouldValidate: false })
+    }
+  }, [selectedCompany, companyPhones, isNew, setValue])
 
   async function onSubmit(data: PatientFormData) {
     setServerError('')
@@ -98,6 +112,24 @@ function PatientForm({
         </div>
       )}
 
+      <div>
+        <Input
+          label="Company / Organization (optional)"
+          list="company-options"
+          placeholder="e.g. St Joseph English Hr Sec School"
+          helperText={
+            selectedCompany?.trim() && companyPhones.has(selectedCompany.trim())
+              ? `Institute phone auto-filled from previous registration`
+              : 'Selecting a known institute auto-fills the phone number'
+          }
+          {...register('company')}
+        />
+        <datalist id="company-options">
+          {companyOptions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      </div>
       <Input
         label="Full Name"
         placeholder="Ravi Kumar"
@@ -105,17 +137,14 @@ function PatientForm({
         {...register('name', { required: 'Name is required' })}
       />
       <Input
-        label="Phone Number"
+        label="Phone Number (optional)"
         type="tel"
         placeholder="9876543210"
-        helperText="Indian mobile number (10 digits) — used for phone/OTP login"
+        helperText="Indian mobile number (10 digits) — leave blank if unavailable"
         error={errors.phone?.message}
         {...register('phone', {
-          required: 'Phone number is required',
-          pattern: {
-            value: /^[6-9]\d{9}$/,
-            message: 'Enter a valid 10-digit Indian mobile number',
-          },
+          validate: (v) =>
+            !v || /^[6-9]\d{9}$/.test(v) || 'Enter a valid 10-digit Indian mobile number',
         })}
       />
       <Input
@@ -127,19 +156,6 @@ function PatientForm({
           pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Invalid email' },
         })}
       />
-      <div>
-        <Input
-          label="Company / Organization (optional)"
-          list="company-options"
-          placeholder="e.g. St Joseph English Hr Sec School"
-          {...register('company')}
-        />
-        <datalist id="company-options">
-          {companyOptions.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-      </div>
       <Input
         label="Age (optional)"
         type="number"
@@ -258,6 +274,7 @@ export default function AdminPatientsPage() {
   const [patients, setPatients] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [instituteFilter, setInstituteFilter] = useState('')
   const [editPatient, setEditPatient] = useState<User | 'new' | null>(null)
   const [viewPatient, setViewPatient] = useState<User | null>(null)
   const [deletePatientTarget, setDeletePatient] = useState<User | null>(null)
@@ -268,17 +285,31 @@ export default function AdminPatientsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const filtered = patients.filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.email ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      p.phone.includes(search) ||
-      (p.company ?? '').toLowerCase().includes(search.toLowerCase()),
-  )
+  const filtered = patients.filter((p) => {
+    if (instituteFilter && (p.company ?? '') !== instituteFilter) return false
+    if (!search) return true
+    const q = search.toLowerCase()
+    return (
+      p.name.toLowerCase().includes(q) ||
+      (p.email ?? '').toLowerCase().includes(q) ||
+      (p.phone ?? '').includes(search) ||
+      (p.company ?? '').toLowerCase().includes(q)
+    )
+  })
 
   const companyOptions = Array.from(
     new Set(patients.map((p) => p.company).filter((c): c is string => !!c)),
   ).sort()
+
+  const companyPhones = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of patients) {
+      if (p.company && p.phone && !map.has(p.company)) {
+        map.set(p.company, p.phone)
+      }
+    }
+    return map
+  }, [patients])
 
   async function handleLogout() {
     await logOut()
@@ -315,6 +346,7 @@ export default function AdminPatientsPage() {
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
             { to: '/admin/invoices', label: 'Invoices' },
+            { to: '/admin/bulk-invoices', label: 'Bulk Invoices' },
             { to: '/admin/tests', label: 'Tests' },
             { to: '/admin/parameters', label: 'Parameters' },
           ].map((l) => (
@@ -335,23 +367,54 @@ export default function AdminPatientsPage() {
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
             <Users className="h-6 w-6 text-teal-500" /> Patients
-            <span className="text-slate-400 text-lg font-normal ml-1">({patients.length})</span>
+            <span className="text-slate-400 text-lg font-normal ml-1">
+              {search || instituteFilter
+                ? `${filtered.length} of ${patients.length}`
+                : patients.length}
+            </span>
           </h1>
           <Button size="sm" onClick={() => setEditPatient('new')}>
             <UserPlus className="h-4 w-4 mr-1" /> Register Patient
           </Button>
         </div>
 
-        {/* Search */}
-        <div className="relative mb-5 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email, phone or company..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
+        {/* Search & filter */}
+        <div className="flex gap-3 mb-5 flex-wrap">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, phone or email…"
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div className="relative">
+            <select
+              value={instituteFilter}
+              onChange={(e) => setInstituteFilter(e.target.value)}
+              className={`pl-3 pr-8 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none ${
+                instituteFilter
+                  ? 'border-teal-400 bg-teal-50 text-teal-700 font-medium'
+                  : 'border-slate-200 text-slate-600'
+              }`}
+            >
+              <option value="">All institutes</option>
+              {companyOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </div>
+          {(search || instituteFilter) && (
+            <button
+              onClick={() => { setSearch(''); setInstituteFilter('') }}
+              className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-500 hover:text-slate-700 hover:border-slate-300"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -361,7 +424,9 @@ export default function AdminPatientsPage() {
             <CardContent className="py-16 text-center">
               <Users className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 font-medium">
-                {search ? 'No patients match your search' : 'No patients registered yet'}
+                {search || instituteFilter
+                  ? `No patients match${instituteFilter ? ` in "${instituteFilter}"` : ''}`
+                  : 'No patients registered yet'}
               </p>
             </CardContent>
           </Card>
@@ -397,8 +462,18 @@ export default function AdminPatientsPage() {
                     <td className="px-6 py-3 text-slate-600 hidden md:table-cell">
                       {patient.phone || '—'}
                     </td>
-                    <td className="px-6 py-3 text-slate-600 hidden md:table-cell">
-                      {patient.company || '—'}
+                    <td className="px-6 py-3 hidden md:table-cell">
+                      {patient.company ? (
+                        <button
+                          onClick={() => setInstituteFilter(patient.company!)}
+                          className="text-teal-600 hover:text-teal-800 hover:underline text-sm text-left"
+                          title={`Filter by ${patient.company}`}
+                        >
+                          {patient.company}
+                        </button>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-3 text-slate-500 hidden lg:table-cell">
                       {patient.createdAt?.toDate
@@ -444,6 +519,7 @@ export default function AdminPatientsPage() {
           <PatientForm
             patient={editPatient === 'new' ? null : (editPatient as User)}
             companyOptions={companyOptions}
+            companyPhones={companyPhones}
             onSave={handleSaved}
             onCancel={() => setEditPatient(null)}
           />
