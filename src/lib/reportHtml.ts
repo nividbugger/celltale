@@ -96,14 +96,40 @@ export async function buildReportHtml(
     gap: 16px;
   }
   .header-box img.logo { height: 60px; }
-  .qr-box { text-align: center; margin-left: auto; }
-  .qr-box img { width: 84px; height: 84px; display: block; }
-  .qr-box .qr-caption {
-    font-size: 8px;
+  .qr-page {
+    page-break-before: always;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 80vh;
+    padding: 24px;
+  }
+  .qr-page h2 {
+    font-size: 20px;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+  }
+  .qr-page .qr-sub {
+    font-size: 12px;
+    color: #475569;
+    max-width: 360px;
+    line-height: 1.6;
+    margin: 0 0 24px 0;
+  }
+  .qr-page .qr-frame {
+    border: 1px solid #334155;
+    padding: 16px;
+    border-radius: 8px;
+  }
+  .qr-page .qr-frame img { width: 220px; height: 220px; display: block; }
+  .qr-page .qr-url {
+    font-size: 10px;
     color: #64748b;
-    margin-top: 2px;
-    max-width: 84px;
-    line-height: 1.3;
+    margin-top: 16px;
+    word-break: break-all;
+    max-width: 360px;
   }
   .clinic-name { font-size: 22px; font-weight: 800; margin: 0 0 6px 0; }
   .clinic-meta { font-size: 11px; line-height: 1.5; }
@@ -172,14 +198,6 @@ export async function buildReportHtml(
           <div>Email: <strong>${clinic.email}</strong></div>
         </div>
       </div>
-      ${
-        qrDataUrl
-          ? `<div class="qr-box">
-        <img src="${qrDataUrl}" alt="Scan to view this report online" />
-        <div class="qr-caption">Scan to view this report online</div>
-      </div>`
-          : ''
-      }
     </div>
 
     <div class="bill-row">
@@ -208,6 +226,22 @@ export async function buildReportHtml(
     <div class="sign-space"></div>
     <div class="sig-label">Authorized Signatory</div>
   </div>
+
+  ${
+    qrDataUrl
+      ? `<div class="qr-page">
+    <h2>View this report online</h2>
+    <p class="qr-sub">
+      Scan the QR code below with your phone camera to open a digital copy of this
+      report. No login is required &mdash; the link is unique to this report.
+    </p>
+    <div class="qr-frame">
+      <img src="${qrDataUrl}" alt="Scan to view this report online" />
+    </div>
+    ${data.reportUrl ? `<div class="qr-url">${data.reportUrl}</div>` : ''}
+  </div>`
+      : ''
+  }
   ${
     options?.autoPrint
       ? `<script>
