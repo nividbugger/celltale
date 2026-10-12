@@ -96,7 +96,16 @@ export async function softDeleteAppointment(id: string): Promise<void> {
 
 // ─── Reports ──────────────────────────────────────────────────────────────
 
+/** Reserve a report document id without writing to Firestore yet. Lets callers
+ *  build the report's public URL (e.g. to stamp a QR onto an uploaded PDF)
+ *  before the report doc is created. */
+export function generateReportId(): string {
+  return doc(collection(db, 'reports')).id
+}
+
 export async function createReport(data: {
+  /** Optional pre-reserved id (see generateReportId); a new id is used when omitted. */
+  id?: string
   appointmentId: string
   patientId: string
   pdfUrl?: string
@@ -115,6 +124,10 @@ export async function createReport(data: {
   if (data.summary) payload.summary = data.summary
   if (data.packageId) payload.packageId = data.packageId
   if (data.testIds && data.testIds.length) payload.testIds = data.testIds
+  if (data.id) {
+    await setDoc(doc(db, 'reports', data.id), payload)
+    return data.id
+  }
   const ref = await addDoc(collection(db, 'reports'), payload)
   return ref.id
 }
@@ -127,6 +140,15 @@ export async function getReportsByPatient(patientId: string): Promise<Report[]> 
   )
   const snap = await getDocs(q)
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Report)
+}
+
+/** Fetch a single report by its document id. Used by the public QR report-view
+ *  page — a single-doc `get`, which firestore.rules permits for anyone holding
+ *  the (unguessable) report id. */
+export async function getReportById(reportId: string): Promise<Report | null> {
+  const snap = await getDoc(doc(db, 'reports', reportId))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() } as Report
 }
 
 export async function getReportByAppointmentId(appointmentId: string): Promise<Report | null> {

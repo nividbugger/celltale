@@ -300,25 +300,28 @@ function AppointmentRow({
     }
   }
 
-  function handlePrintReport() {
+  async function handlePrintReport() {
     if (!report) return
     if (report.pdfUrl) {
       window.open(report.pdfUrl, '_blank')
       return
     }
-    const html = buildReportHtml(
+    // Open the print window synchronously (before any await) so it isn't treated
+    // as a popup blocked by the browser, then fill it once the HTML is ready.
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+    const html = await buildReportHtml(
       {
         patientName: appt.patientName,
         packageName: packageLabel,
         date: format(new Date(appt.date), 'dd MMM yyyy'),
         testValues: report.testValues,
         summary: report.summary,
+        reportUrl: `${window.location.origin}/r/${report.id}`,
       },
       clinic,
       { autoPrint: true },
     )
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
     printWindow.document.write(html)
     printWindow.document.close()
   }

@@ -7,6 +7,7 @@ import { AdminRoute } from './components/layout/AdminRoute'
 import LandingPage from './pages/public/LandingPage'
 import LoginPage from './pages/public/LoginPage'
 import RegisterPage from './pages/public/RegisterPage'
+import ReportViewPage from './pages/public/ReportViewPage'
 
 // Patient pages
 import DashboardPage from './pages/patient/DashboardPage'
@@ -39,6 +40,8 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {/* Public report view — opened by scanning the QR printed on a report */}
+          <Route path="/r/:reportId" element={<ReportViewPage />} />
 
           {/* Patient (protected) */}
           <Route

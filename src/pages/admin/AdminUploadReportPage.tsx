@@ -7,10 +7,16 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAppointmentById, createReport, getReportByAppointmentId } from '../../lib/firestore'
+import {
+  getAppointmentById,
+  createReport,
+  generateReportId,
+  getReportByAppointmentId,
+} from '../../lib/firestore'
 import { markReportUploaded } from '../../lib/api'
 import { describePackages } from '../../lib/appointmentDisplay'
 import { uploadReportPDF } from '../../lib/storage'
+import { stampQrOnPdf } from '../../lib/pdfQr'
 import type { Appointment } from '../../types'
 
 export default function AdminUploadReportPage() {
@@ -46,8 +52,24 @@ export default function AdminUploadReportPage() {
     setServerError('')
     setSubmitting(true)
     try {
-      const pdfUrl = await uploadReportPDF(appointmentId, pdfFile, setUploadProgress)
+      // Reserve the report id up front so we can stamp a QR linking to the
+      // report's public page onto the PDF before uploading it.
+      const reportId = generateReportId()
+      const reportUrl = `${window.location.origin}/r/${reportId}`
+
+      let fileToUpload: File = pdfFile
+      try {
+        const stamped = await stampQrOnPdf(pdfFile, reportUrl)
+        fileToUpload = new File([stamped], pdfFile.name, { type: 'application/pdf' })
+      } catch (stampErr) {
+        // If the PDF can't be parsed/stamped (e.g. corrupt or encrypted), fall
+        // back to uploading the original — the QR still works from the app page.
+        console.warn('Could not stamp QR onto PDF; uploading original.', stampErr)
+      }
+
+      const pdfUrl = await uploadReportPDF(appointmentId, fileToUpload, setUploadProgress)
       await createReport({
+        id: reportId,
         appointmentId,
         patientId: appointment.patientId,
         pdfUrl,

@@ -1,3 +1,4 @@
+import QRCode from 'qrcode'
 import type { ClinicSettings, TestValue } from '../types'
 import logoUrl from '../assets/logo.png'
 
@@ -7,6 +8,9 @@ export interface ReportPrintData {
   date: string
   testValues: TestValue[]
   summary?: string
+  /** Absolute URL that opens this exact report online. When provided, it is
+   *  rendered as a scannable QR code on the report. */
+  reportUrl?: string
 }
 
 function groupByCategory(values: TestValue[]): Record<string, TestValue[]> {
@@ -17,12 +21,18 @@ function groupByCategory(values: TestValue[]): Record<string, TestValue[]> {
   }, {})
 }
 
-export function buildReportHtml(
+export async function buildReportHtml(
   data: ReportPrintData,
   clinic: ClinicSettings,
   options?: { autoPrint?: boolean },
-): string {
+): Promise<string> {
   const grouped = groupByCategory(data.testValues)
+
+  // Render the "scan to open this report" QR as an inline PNG data URI so it
+  // survives printing / saving to PDF without any external request.
+  const qrDataUrl = data.reportUrl
+    ? await QRCode.toDataURL(data.reportUrl, { margin: 1, width: 240 })
+    : ''
 
   const sections = Object.entries(grouped)
     .map(
@@ -86,6 +96,15 @@ export function buildReportHtml(
     gap: 16px;
   }
   .header-box img.logo { height: 60px; }
+  .qr-box { text-align: center; margin-left: auto; }
+  .qr-box img { width: 84px; height: 84px; display: block; }
+  .qr-box .qr-caption {
+    font-size: 8px;
+    color: #64748b;
+    margin-top: 2px;
+    max-width: 84px;
+    line-height: 1.3;
+  }
   .clinic-name { font-size: 22px; font-weight: 800; margin: 0 0 6px 0; }
   .clinic-meta { font-size: 11px; line-height: 1.5; }
   .clinic-meta-grid {
@@ -153,6 +172,14 @@ export function buildReportHtml(
           <div>Email: <strong>${clinic.email}</strong></div>
         </div>
       </div>
+      ${
+        qrDataUrl
+          ? `<div class="qr-box">
+        <img src="${qrDataUrl}" alt="Scan to view this report online" />
+        <div class="qr-caption">Scan to view this report online</div>
+      </div>`
+          : ''
+      }
     </div>
 
     <div class="bill-row">
