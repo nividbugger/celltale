@@ -668,6 +668,7 @@ export default function AdminPackagesPage() {
               <a href="/admin/patients" className="hover:text-slate-900">Patients</a>
               <span className="text-teal-600 font-semibold">Packages</span>
               <a href="/admin/invoices" className="hover:text-slate-900">Invoices</a>
+              <a href="/admin/bulk-invoices" className="hover:text-slate-900">Bulk Invoices</a>
               <a href="/admin/tests" className="hover:text-slate-900">Tests</a>
               <a href="/admin/parameters" className="hover:text-slate-900">Parameters</a>
             </nav>

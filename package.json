@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail --names \"vite,emulators,seed\" --prefix-colors \"cyan,yellow,green\" \"vite\" \"firebase emulators:start\" \"node scripts/seed-when-ready.mjs\"",
+    "dev": "concurrently --kill-others-on-fail --names \"vite,api,emulators,seed\" --prefix-colors \"cyan,magenta,yellow,green\" \"vite\" \"npm --prefix api run build:watch\" \"firebase emulators:start\" \"node scripts/seed-when-ready.mjs\"",
     "dev:frontend": "vite",
     "dev:emulators": "concurrently --kill-others-on-fail --names \"emulators,seed\" --prefix-colors \"yellow,green\" \"firebase emulators:start\" \"node scripts/seed-when-ready.mjs\"",
     "build": "tsc && vite build",
@@ -17,6 +17,8 @@
     "firebase-functions": "^7.2.5",
     "jsbarcode": "^3.12.3",
     "lucide-react": "^0.400.0",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-google-recaptcha-v3": "^1.11.0",
@@ -24,6 +26,7 @@
     "react-router-dom": "^6.24.0"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

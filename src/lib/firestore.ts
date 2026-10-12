@@ -26,6 +26,7 @@ import type {
   Package,
   ClinicSettings,
   Invoice,
+  BulkInvoice,
   Test,
   DiagnosticParameter,
 } from '../types'
@@ -95,7 +96,16 @@ export async function softDeleteAppointment(id: string): Promise<void> {
 
 // ─── Reports ──────────────────────────────────────────────────────────────
 
+/** Reserve a report document id without writing to Firestore yet. Lets callers
+ *  build the report's public URL (e.g. to stamp a QR onto an uploaded PDF)
+ *  before the report doc is created. */
+export function generateReportId(): string {
+  return doc(collection(db, 'reports')).id
+}
+
 export async function createReport(data: {
+  /** Optional pre-reserved id (see generateReportId); a new id is used when omitted. */
+  id?: string
   appointmentId: string
   patientId: string
   pdfUrl?: string
@@ -114,6 +124,10 @@ export async function createReport(data: {
   if (data.summary) payload.summary = data.summary
   if (data.packageId) payload.packageId = data.packageId
   if (data.testIds && data.testIds.length) payload.testIds = data.testIds
+  if (data.id) {
+    await setDoc(doc(db, 'reports', data.id), payload)
+    return data.id
+  }
   const ref = await addDoc(collection(db, 'reports'), payload)
   return ref.id
 }
@@ -126,6 +140,15 @@ export async function getReportsByPatient(patientId: string): Promise<Report[]> 
   )
   const snap = await getDocs(q)
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Report)
+}
+
+/** Fetch a single report by its document id. Used by the public QR report-view
+ *  page — a single-doc `get`, which firestore.rules permits for anyone holding
+ *  the (unguessable) report id. */
+export async function getReportById(reportId: string): Promise<Report | null> {
+  const snap = await getDoc(doc(db, 'reports', reportId))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() } as Report
 }
 
 export async function getReportByAppointmentId(appointmentId: string): Promise<Report | null> {
@@ -170,6 +193,16 @@ export async function updateReport(
   if (data.summary !== undefined) payload.summary = data.summary
   if (data.testIds) payload.testIds = data.testIds
   await updateDoc(doc(db, 'reports', reportId), payload)
+}
+
+/** Replace the uploaded PDF on an existing report, keeping the same report id so
+ *  previously shared/printed QR links (/r/<id>) keep working. Bumps uploadedAt so
+ *  the report sorts as freshly updated. */
+export async function setReportPdfUrl(reportId: string, pdfUrl: string): Promise<void> {
+  await updateDoc(doc(db, 'reports', reportId), {
+    pdfUrl,
+    uploadedAt: serverTimestamp(),
+  })
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────
@@ -290,6 +323,51 @@ export async function getInvoiceByAppointmentId(appointmentId: string): Promise<
 
 export async function setAppointmentInvoiceId(appointmentId: string, invoiceId: string): Promise<void> {
   await updateDoc(doc(db, 'appointments', appointmentId), { invoiceId })
+}
+
+export async function markInvoicePaid(id: string): Promise<void> {
+  await updateDoc(doc(db, 'invoices', id), {
+    isPaid: true,
+    paidAt: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+// ─── Bulk Invoices ───────────────────────────────────────────────────────────
+
+export async function getAllBulkInvoices(): Promise<BulkInvoice[]> {
+  const snap = await getDocs(collection(db, 'bulkInvoices'))
+  const invoices = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BulkInvoice)
+  return invoices.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+export async function markBulkInvoicePaid(id: string): Promise<void> {
+  await updateDoc(doc(db, 'bulkInvoices', id), {
+    isPaid: true,
+    paidAt: new Date().toISOString(),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function deleteBulkInvoice(id: string): Promise<void> {
+  await deleteDoc(doc(db, 'bulkInvoices', id))
+}
+
+export async function getAppointmentsByPatientIds(patientIds: string[]): Promise<Appointment[]> {
+  if (patientIds.length === 0) return []
+  const chunks: string[][] = []
+  for (let i = 0; i < patientIds.length; i += 30) {
+    chunks.push(patientIds.slice(i, i + 30))
+  }
+  const results: Appointment[] = []
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const q = query(collection(db, 'appointments'), where('patientId', 'in', chunk))
+      const snap = await getDocs(q)
+      snap.docs.forEach((d) => results.push({ id: d.id, ...d.data() } as Appointment))
+    }),
+  )
+  return results.sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
 }
 
 // ─── Diagnostic Parameters ────────────────────────────────────────────────

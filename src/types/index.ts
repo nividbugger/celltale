@@ -8,7 +8,7 @@ export interface User {
   uid: string
   name: string
   email: string
-  phone: string
+  phone?: string
   dob?: string
   address?: string
   company?: string
@@ -152,6 +152,7 @@ export interface Appointment {
   /** Sum of resolvedTests[].cost, computed once at confirm(). */
   totalCost: number
   invoiceId?: string
+  bulkInvoiceId?: string
 
   date: string
   timeSlot: string
@@ -430,6 +431,32 @@ export interface Invoice {
    * before this refactor — invoices were previously free-standing, keyed only on billToName. */
   appointmentId?: string
   patientId?: string
+  isPaid?: boolean
+  paidAt?: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+// ─── Bulk Invoices ────────────────────────────────────────────────────────
+
+export interface BulkInvoiceLineItem {
+  packageId: string
+  packageName: string
+  patientCount: number
+  pricePerPatient: number
+  totalAmount: number
+}
+
+export interface BulkInvoice {
+  id: string
+  invoiceNumber: number
+  date: string
+  instituteName: string
+  lineItems: BulkInvoiceLineItem[]
+  appointmentIds: string[]
+  totalAmount: number
+  isPaid: boolean
+  paidAt?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }

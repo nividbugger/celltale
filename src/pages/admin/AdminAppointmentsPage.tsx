@@ -300,25 +300,28 @@ function AppointmentRow({
     }
   }
 
-  function handlePrintReport() {
+  async function handlePrintReport() {
     if (!report) return
     if (report.pdfUrl) {
       window.open(report.pdfUrl, '_blank')
       return
     }
-    const html = buildReportHtml(
+    // Open the print window synchronously (before any await) so it isn't treated
+    // as a popup blocked by the browser, then fill it once the HTML is ready.
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+    const html = await buildReportHtml(
       {
         patientName: appt.patientName,
         packageName: packageLabel,
         date: format(new Date(appt.date), 'dd MMM yyyy'),
         testValues: report.testValues,
         summary: report.summary,
+        reportUrl: `${window.location.origin}/r/${report.id}`,
       },
       clinic,
       { autoPrint: true },
     )
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
     printWindow.document.write(html)
     printWindow.document.close()
   }
@@ -414,7 +417,10 @@ function AppointmentRow({
                 </>
               )}
               {canViewReport && (
-                <IconBtn label="View Report" onClick={handleViewReport}><Eye className="h-4 w-4" /></IconBtn>
+                <>
+                  <IconBtn label="View Report" onClick={handleViewReport}><Eye className="h-4 w-4" /></IconBtn>
+                  <IconLink label="Replace Report" to={`/admin/upload-report/${appt.id}`}><Upload className="h-4 w-4" /></IconLink>
+                </>
               )}
 
               {/* Invoice */}
@@ -724,6 +730,7 @@ export default function AdminAppointmentsPage() {
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
             { to: '/admin/invoices', label: 'Invoices' },
+            { to: '/admin/bulk-invoices', label: 'Bulk Invoices' },
             { to: '/admin/tests', label: 'Tests' },
             { to: '/admin/parameters', label: 'Parameters' },
           ].map((l) => (

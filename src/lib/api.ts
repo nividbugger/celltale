@@ -318,6 +318,47 @@ export async function createAppointmentInvoice(payload: CreateInvoiceRequest): P
   })
 }
 
+// ─── Admin: Bulk Invoices API ─────────────────────────────────────────────────
+
+export interface BulkInvoiceLineItemInput {
+  packageId: string
+  packageName: string
+  patientCount: number
+  pricePerPatient: number
+  totalAmount: number
+}
+
+export interface CreateBulkInvoiceRequest {
+  instituteName: string
+  date: string
+  appointmentIds: string[]
+  lineItems?: BulkInvoiceLineItemInput[]
+}
+
+export interface BulkInvoiceResult {
+  id: string
+  invoiceNumber: number
+  totalAmount: number
+}
+
+/** Admin: create a consolidated bulk invoice for an institute, grouped by package. */
+export async function createBulkInvoice(payload: CreateBulkInvoiceRequest): Promise<BulkInvoiceResult> {
+  return apiFetch('/admin/bulk-invoices', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** Admin: mark a bulk invoice as paid. */
+export async function markBulkInvoicePaidApi(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/admin/bulk-invoices/${encodeURIComponent(id)}/paid`, { method: 'PATCH' })
+}
+
+/** Admin: delete a bulk invoice and restore its appointments to a billable state. */
+export async function deleteBulkInvoiceApi(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/admin/bulk-invoices/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 // ─── Appointments API (shared by patient portal and admin walk-in flow) ───────
 
 export type ApiAppointmentStatus =

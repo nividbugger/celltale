@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { FileText, Plus, Pencil, Trash2, Printer, Settings2, Receipt, CalendarDays } from 'lucide-react'
+import { FileText, Plus, Pencil, Trash2, Printer, Settings2, Receipt, CalendarDays, CheckCircle2, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
@@ -10,7 +10,7 @@ import { Modal } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { ClinicSettingsModal } from '../../components/admin/ClinicSettingsModal'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllInvoices, getClinicSettings, deleteInvoice } from '../../lib/firestore'
+import { getAllInvoices, getClinicSettings, deleteInvoice, markInvoicePaid } from '../../lib/firestore'
 import { buildInvoiceHtml, invoiceTotals } from '../../lib/invoiceHtml'
 import { DEFAULT_CLINIC_SETTINGS } from '../../types'
 import type { ClinicSettings, Invoice } from '../../types'
@@ -24,6 +24,7 @@ export default function AdminInvoicesPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<Invoice | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -48,6 +49,16 @@ export default function AdminInvoicesPage() {
     if (!printWindow) return
     printWindow.document.write(html)
     printWindow.document.close()
+  }
+
+  async function handleMarkPaid(invoice: Invoice) {
+    setMarkingPaid(invoice.id)
+    try {
+      await markInvoicePaid(invoice.id)
+      setInvoices((prev) => prev.map((i) => (i.id === invoice.id ? { ...i, isPaid: true } : i)))
+    } finally {
+      setMarkingPaid(null)
+    }
   }
 
   async function handleDelete() {
@@ -82,6 +93,7 @@ export default function AdminInvoicesPage() {
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
             { to: '/admin/invoices', label: 'Invoices' },
+            { to: '/admin/bulk-invoices', label: 'Bulk Invoices' },
             { to: '/admin/tests', label: 'Tests' },
             { to: '/admin/parameters', label: 'Parameters' },
           ].map((l) => (
@@ -143,13 +155,22 @@ export default function AdminInvoicesPage() {
                   <CardContent className="py-4">
                     <div className="flex items-center gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-bold text-sm text-slate-900">
                             Invoice #{invoice.invoiceNumber}
                           </p>
                           <span className="text-slate-400 text-xs">
                             {format(new Date(invoice.date), 'dd MMM yyyy')}
                           </span>
+                          {invoice.isPaid ? (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                              <CheckCircle2 className="h-3 w-3" /> Paid
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                              <Clock className="h-3 w-3" /> Unpaid
+                            </span>
+                          )}
                         </div>
                         <p className="text-slate-500 text-sm mt-0.5">{invoice.billToName}</p>
                       </div>
@@ -173,6 +194,16 @@ export default function AdminInvoicesPage() {
                         <Button size="sm" variant="outline" onClick={() => handlePrint(invoice)}>
                           <Printer className="h-3.5 w-3.5" />
                         </Button>
+                        {!invoice.isPaid && (
+                          <Button
+                            size="sm"
+                            loading={markingPaid === invoice.id}
+                            onClick={() => handleMarkPaid(invoice)}
+                            className="bg-green-600 hover:bg-green-700 text-white border-0"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Paid
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"

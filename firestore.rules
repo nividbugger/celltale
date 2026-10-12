@@ -26,7 +26,13 @@ service cloud.firestore {
     }
 
     match /reports/{reportId} {
-      allow read:  if request.auth.uid == resource.data.patientId || isAdmin();
+      // Single-document reads are public by design: the report id is an
+      // unguessable 20-char Firestore token that is printed as a QR code on the
+      // physical report, so only someone already holding a copy of the report can
+      // open it (the "unlisted link" model). Queries/enumeration (`list`) stay
+      // restricted to the owning patient or an admin so reports can't be listed.
+      allow get:   if true;
+      allow list:  if request.auth.uid == resource.data.patientId || isAdmin();
       allow write: if isAdmin();
     }
 
@@ -52,6 +58,10 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /bulkInvoices/{invoiceId} {
       allow read, write: if isAdmin();
     }
 

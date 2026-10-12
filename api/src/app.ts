@@ -9,6 +9,7 @@ import adminPatientsRouter from './routes/adminPatients'
 import adminTestsRouter from './routes/adminTests'
 import adminParametersRouter from './routes/adminParameters'
 import adminInvoicesRouter from './routes/adminInvoices'
+import adminBulkInvoicesRouter from './routes/adminBulkInvoices'
 import appointmentsRouter from './routes/appointments'
 import samplesRouter from './routes/samples'
 import lisOrdersRouter from './routes/lisOrders'
@@ -74,6 +75,7 @@ app.use('/api/admin/patients', adminPatientsRouter)
 app.use('/api/admin/tests', adminTestsRouter)
 app.use('/api/admin/parameters', adminParametersRouter)
 app.use('/api/admin/invoices', adminInvoicesRouter)
+app.use('/api/admin/bulk-invoices', adminBulkInvoicesRouter)
 app.use('/api/appointments', appointmentsRouter)
 app.use('/api/samples', samplesRouter)
 app.use('/api/lis', lisOrdersRouter)

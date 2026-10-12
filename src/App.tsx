@@ -7,6 +7,7 @@ import { AdminRoute } from './components/layout/AdminRoute'
 import LandingPage from './pages/public/LandingPage'
 import LoginPage from './pages/public/LoginPage'
 import RegisterPage from './pages/public/RegisterPage'
+import ReportViewPage from './pages/public/ReportViewPage'
 
 // Patient pages
 import DashboardPage from './pages/patient/DashboardPage'
@@ -26,6 +27,7 @@ import AdminPatientsPage from './pages/admin/AdminPatientsPage'
 import AdminPackagesPage from './pages/admin/AdminPackagesPage'
 import AdminInvoicesPage from './pages/admin/AdminInvoicesPage'
 import AdminInvoiceEditorPage from './pages/admin/AdminInvoiceEditorPage'
+import AdminBulkInvoicesPage from './pages/admin/AdminBulkInvoicesPage'
 import TestsPage from './pages/admin/TestsPage'
 import ParametersPage from './pages/admin/ParametersPage'
 
@@ -38,6 +40,8 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {/* Public report view — opened by scanning the QR printed on a report */}
+          <Route path="/r/:reportId" element={<ReportViewPage />} />
 
           {/* Patient (protected) */}
           <Route
@@ -152,6 +156,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminInvoiceEditorPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/bulk-invoices"
+            element={
+              <AdminRoute>
+                <AdminBulkInvoicesPage />
               </AdminRoute>
             }
           />
