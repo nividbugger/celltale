@@ -1,6 +1,5 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { db } from './firebase'
-import type { AppointmentStatus } from '../types'
 
 // ─── Mail queue item types ────────────────────────────────────────────────
 
@@ -39,16 +38,4 @@ export async function queueEmail(
     status: 'pending',
     createdAt: serverTimestamp(),
   })
-}
-
-/**
- * Maps an AppointmentStatus transition to an EmailType (or null if no email needed).
- */
-export function statusToEmailType(status: AppointmentStatus): EmailType | null {
-  switch (status) {
-    case 'Confirmed':       return 'appointment_confirmed'
-    case 'Sample Collected': return 'sample_collected'
-    case 'Report Ready':    return 'report_ready'
-    default:                return null
-  }
 }

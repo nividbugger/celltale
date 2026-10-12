@@ -1,11 +1,14 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithPhoneNumber,
   signOut,
   onAuthStateChanged,
   type User as FirebaseUser,
+  type ConfirmationResult,
+  type RecaptchaVerifier,
   updateProfile,
 } from 'firebase/auth'
 import { auth, googleProvider } from '../lib/firebase'
@@ -24,6 +27,9 @@ interface AuthContextValue {
   signUp: (email: string, password: string, name: string, phone: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signInGoogle: () => Promise<void>
+  sendOtp: (phone: string, recaptchaVerifier: RecaptchaVerifier) => Promise<void>
+  confirmOtp: (code: string) => Promise<{ isNewProfile: boolean }>
+  completePhoneProfile: (name: string, email?: string) => Promise<void>
   logOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -34,6 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null)
   const [userProfile, setUserProfile] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const confirmationResultRef = useRef<ConfirmationResult | null>(null)
 
   const isAdmin = userProfile?.role === 'admin'
 
@@ -73,6 +80,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserProfile(null)
   }
 
+  /** Sends an OTP to the given 10-digit Indian mobile number. */
+  async function sendOtp(phone: string, recaptchaVerifier: RecaptchaVerifier) {
+    confirmationResultRef.current = await signInWithPhoneNumber(auth, `+91${phone}`, recaptchaVerifier)
+  }
+
+  /**
+   * Confirms the OTP code, completing sign-in. Firebase resolves the phone
+   * number to whichever Auth user already owns it — so if an admin
+   * pre-registered this number, `isNewProfile` will be false and the admin's
+   * data is already in Firestore under this same uid.
+   */
+  async function confirmOtp(code: string): Promise<{ isNewProfile: boolean }> {
+    if (!confirmationResultRef.current) {
+      throw new Error('No OTP was requested. Please request a new code.')
+    }
+    const { user } = await confirmationResultRef.current.confirm(code)
+    confirmationResultRef.current = null
+    const existing = await getUserDocument(user.uid)
+    if (existing) {
+      await loadProfile(user)
+    }
+    return { isNewProfile: !existing }
+  }
+
+  /** Creates the Firestore profile for a brand-new phone sign-up (no admin record existed). */
+  async function completePhoneProfile(name: string, email?: string) {
+    const user = auth.currentUser
+    if (!user) throw new Error('Not signed in.')
+    const phone = (user.phoneNumber ?? '').replace(/^\+91/, '')
+    await createUserDocument(user.uid, { name, phone, email })
+    await loadProfile(user)
+  }
+
   async function refreshProfile() {
     if (currentUser) await loadProfile(currentUser)
   }
@@ -103,6 +143,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signIn,
     signInGoogle,
+    sendOtp,
+    confirmOtp,
+    completePhoneProfile,
     logOut,
     refreshProfile,
   }

@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "samples",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sampleType", "order": "ASCENDING" },
+        { "fieldPath": "collectionStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "samples",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "appointmentId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

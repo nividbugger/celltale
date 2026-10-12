@@ -8,6 +8,7 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAdminStats, getAllAppointments } from '../../lib/firestore'
+import { describePackages } from '../../lib/appointmentDisplay'
 import type { Appointment } from '../../types'
 import { format } from 'date-fns'
 
@@ -26,7 +27,7 @@ export default function AdminDashboardPage() {
     Promise.all([getAdminStats(), getAllAppointments()])
       .then(([s, appts]) => {
         setStats(s)
-        setRecent(appts.slice(0, 5))
+        setRecent(appts.filter((a) => a.status !== 'Deleted' && a.status !== 'Cancelled').slice(0, 5))
       })
       .finally(() => setLoading(false))
   }, [])
@@ -63,11 +64,19 @@ export default function AdminDashboardPage() {
             { to: '/admin/appointments', label: 'Appointments' },
             { to: '/admin/patients', label: 'Patients' },
             { to: '/admin/packages', label: 'Packages' },
+            { to: '/admin/invoices', label: 'Invoices' },
+            { to: '/admin/bulk-invoices', label: 'Bulk Invoices' },
+            { to: '/admin/tests', label: 'Tests' },
+            { to: '/admin/parameters', label: 'Parameters' },
           ].map((l) => (
             <Link
               key={l.to}
               to={l.to}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm font-medium text-slate-600 hover:border-teal-400 hover:text-teal-600 transition-colors"
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                l.to === '/admin'
+                  ? 'bg-teal-100 text-teal-700 border border-teal-300'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:border-teal-400 hover:text-teal-600'
+              }`}
             >
               {l.label}
             </Link>
@@ -153,7 +162,7 @@ export default function AdminDashboardPage() {
                     <tr key={appt.id} className="hover:bg-slate-50">
                       <td className="px-6 py-3 font-medium text-slate-900">{appt.patientName}</td>
                       <td className="px-6 py-3 text-slate-600 hidden sm:table-cell">
-                        {appt.packageName}
+                        {describePackages(appt)}
                       </td>
                       <td className="px-6 py-3 text-slate-600 hidden md:table-cell">
                         {format(new Date(appt.date), 'dd MMM yyyy')}

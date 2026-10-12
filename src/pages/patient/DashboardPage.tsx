@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/Button'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAppointmentsByPatient } from '../../lib/firestore'
+import { describePackages } from '../../lib/appointmentDisplay'
 import type { Appointment } from '../../types'
 import { format } from 'date-fns'
 
@@ -24,8 +25,8 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [userProfile?.uid])
 
-  const pending = appointments.filter((a) => a.status === 'Pending').length
-  const reportReady = appointments.filter((a) => a.status === 'Report Ready').length
+  const pending = appointments.filter((a) => a.status === 'Created').length
+  const reportReady = appointments.filter((a) => a.status === 'ReportUploaded').length
   const recent = appointments.slice(0, 3)
 
   return (
@@ -109,7 +110,7 @@ export default function DashboardPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-slate-900 truncate">
-                          {appt.packageName}
+                          {describePackages(appt)}
                         </p>
                         <p className="text-slate-500 text-sm">
                           {format(new Date(appt.date), 'dd MMM yyyy')} · {appt.timeSlot}

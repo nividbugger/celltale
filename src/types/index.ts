@@ -8,31 +8,152 @@ export interface User {
   uid: string
   name: string
   email: string
-  phone: string
+  phone?: string
   dob?: string
   address?: string
+  company?: string
+  age?: number
+  gender?: string
+  additionalInfo?: string
+  collectionTimestamp?: Timestamp
   role: UserRole
   createdAt: Timestamp
 }
 
+// ─── Diagnostic Parameters ────────────────────────────────────────────────
+
+export interface DiagnosticParameter {
+  id: string
+  code: string
+  analyzer: string
+  loinc: string | null
+  name: string
+  discipline: string
+  tubeColor: string
+  additive: string
+  unit: string
+  refLow: number | null
+  refHigh: number | null
+  sex: 'ALL' | 'M' | 'F'
+  refText: string | null
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export function formatParameterRefRange(
+  p: Pick<DiagnosticParameter, 'refLow' | 'refHigh' | 'refText' | 'sex'>,
+): string {
+  if (p.refText) return p.refText
+  const lo = p.refLow !== null ? p.refLow : undefined
+  const hi = p.refHigh !== null ? p.refHigh : undefined
+  let range = ''
+  if (lo !== undefined && hi !== undefined) range = `${lo}–${hi}`
+  else if (lo !== undefined) range = `> ${lo}`
+  else if (hi !== undefined) range = `< ${hi}`
+  return p.sex !== 'ALL' ? `${range} (${p.sex})` : range
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────
+
+export type SampleType = 'blood' | 'urine' | 'stool' | 'swab' | 'other'
+
+export interface TestParameter {
+  parameterId?: string
+  parameter: string
+  machineCode?: string
+  unit: string
+  biologicalReference: string
+  tubeColor?: string
+}
+
+export interface Test {
+  id: string
+  testId: string
+  machineCode?: string
+  category?: string
+  isActive?: boolean
+  name: string
+  parameters: TestParameter[]
+  cost?: number
+  /** What specimen this test is run on. Optional only for legacy rows created before this
+   * field existed — the migration backfills it to 'other'; every new test must set it. */
+  sampleType?: SampleType
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
 // ─── Appointments ─────────────────────────────────────────────────────────
 
-export type AppointmentStatus =
+/** Old status vocabulary. Preserved only as the type of `Appointment.legacyStatus` for
+ * migrated rows — no new code should read or write this. */
+export type LegacyAppointmentStatus =
   | 'Pending'
   | 'Confirmed'
   | 'Sample Collected'
   | 'Report Ready'
   | 'Completed'
   | 'Cancelled'
+  | 'Deleted'
+
+export type AppointmentStatus =
+  | 'Created'
+  | 'Confirmed'
+  | 'SamplesGenerating'
+  | 'SamplesGenerated'
+  | 'SamplesCollected'
+  | 'InLaboratory'
+  | 'ReportGenerated'
+  | 'ReportUploaded'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Deleted'
+
+/** Which package(s) an appointment drew tests from — provenance/billing metadata only.
+ * Never read by sample generation, barcode, collection, lab, or reporting logic. */
+export interface AppointmentPackageEntry {
+  packageId: string
+  packageName: string
+  priceAtBooking: number
+}
+
+/** A test as it was at the moment the appointment was confirmed — snapshotted, not a live
+ * reference, so editing/deleting the underlying Test afterward can't change what a
+ * historical appointment "means". This is the payload sample generation actually reads. */
+export interface ResolvedTest {
+  testId: string
+  name: string
+  sampleType: SampleType
+  cost: number
+  origin: 'package' | 'manual'
+  sourcePackageId?: string
+}
 
 export interface Appointment {
   id: string
   patientId: string
   patientName: string
   patientPhone: string
-  packageId: string
-  packageName: string
-  packagePrice: number
+
+  // LEGACY — kept permanently, read-only, never written by new code paths.
+  packageId?: string
+  packageName?: string
+  packagePrice?: number
+  barcodeId?: string
+  legacyStatus?: LegacyAppointmentStatus
+
+  // Provenance (denormalized; packageName/priceAtBooking do not update retroactively if the
+  // source package is later renamed/repriced).
+  packages: AppointmentPackageEntry[]
+  manualTestIds: string[]
+  /** Frozen at confirm(). Empty pre-confirm. */
+  resolvedTests: ResolvedTest[]
+  /** Denormalized pointer list — source of truth is the `samples` collection. */
+  sampleIds: string[]
+  /** Sum of resolvedTests[].cost, computed once at confirm(). */
+  totalCost: number
+  invoiceId?: string
+  bulkInvoiceId?: string
+
   date: string
   timeSlot: string
   collectionAddress: string
@@ -41,6 +162,27 @@ export interface Appointment {
   createdAt: Timestamp
   updatedAt: Timestamp
   notes?: string
+}
+
+// ─── Samples ──────────────────────────────────────────────────────────────
+
+export type SampleCollectionStatus = 'pending' | 'collected' | 'rejected'
+
+export interface Sample {
+  id: string
+  appointmentId: string
+  patientId: string
+  sampleType: SampleType
+  /** Copied verbatim from the appointment's resolvedTests at generation time — never
+   * re-derived later (e.g. a rejected sample's replacement copies this from the original). */
+  testIds: string[]
+  barcodeId: string
+  collectionStatus: SampleCollectionStatus
+  collectionDatetime?: Timestamp
+  collector?: string
+  remarks?: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────
@@ -59,12 +201,19 @@ export interface Report {
   appointmentId: string
   patientId: string
   uploadedAt: Timestamp
-  pdfUrl: string
+  pdfUrl?: string
   testValues: TestValue[]
   summary?: string
+  packageId?: string
+  testIds?: string[]
 }
 
 // ─── Packages ─────────────────────────────────────────────────────────────
+
+export interface PackageSampleGroup {
+  label: string
+  testIds: string[]
+}
 
 export interface PackageDetail {
   category: string
@@ -80,9 +229,11 @@ export interface Package {
   color: string
   headerColor: string
   buttonColor: string
-  consultations: string[]
   summary: string[]
   details: PackageDetail[]
+  testIds: string[]
+  /** Optional custom tube-split config. Absent = auto-group by sampleType. */
+  sampleGroups?: PackageSampleGroup[]
   order: number
 }
 
@@ -92,12 +243,13 @@ export const PACKAGES: Package[] = [
     name: 'Basic Screening Package',
     price: 1599,
     testCount: 30,
+    testIds: [],
     isPopular: false,
     order: 0,
     color: 'bg-white border-slate-200',
     headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Blood-CBC (17 Parameters)',
       'Thyroid (1 Parameter: TSH)',
@@ -120,12 +272,13 @@ export const PACKAGES: Package[] = [
     name: 'Economy Disease Checkup',
     price: 2599,
     testCount: 42,
+    testIds: [],
     isPopular: true,
     order: 1,
     color: 'bg-blue-50 border-blue-200 shadow-blue-100',
     headerColor: 'text-blue-700',
     buttonColor: 'bg-blue-600 hover:bg-blue-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Blood-CBC (17 Parameters)',
       'Thyroid (3 Parameters: T3, T4, TSH)',
@@ -149,12 +302,13 @@ export const PACKAGES: Package[] = [
     name: 'Advanced Prevention',
     price: 3599,
     testCount: 56,
+    testIds: [],
     isPopular: false,
     order: 2,
     color: 'bg-white border-slate-200',
     headerColor: 'text-slate-800',
     buttonColor: 'bg-slate-800 hover:bg-slate-700 text-white',
-    consultations: ['Doctor', 'Dental', 'Eye'],
+
     summary: [
       'Anemia Profile (Iron, B12)',
       'Full Liver Profile (11 Parameters)',
@@ -210,12 +364,104 @@ export const TIME_SLOTS: string[] = [
 // ─── Status Colors ────────────────────────────────────────────────────────
 
 export const STATUS_COLORS: Record<AppointmentStatus, string> = {
-  Pending: 'bg-yellow-100 text-yellow-800',
+  Created: 'bg-yellow-100 text-yellow-800',
   Confirmed: 'bg-blue-100 text-blue-800',
-  'Sample Collected': 'bg-indigo-100 text-indigo-800',
-  'Report Ready': 'bg-teal-100 text-teal-800',
+  SamplesGenerating: 'bg-blue-100 text-blue-800',
+  SamplesGenerated: 'bg-indigo-100 text-indigo-800',
+  SamplesCollected: 'bg-indigo-100 text-indigo-800',
+  InLaboratory: 'bg-purple-100 text-purple-800',
+  ReportGenerated: 'bg-teal-100 text-teal-800',
+  ReportUploaded: 'bg-teal-100 text-teal-800',
   Completed: 'bg-green-100 text-green-800',
   Cancelled: 'bg-red-100 text-red-800',
+  Deleted: 'bg-slate-100 text-slate-500',
+}
+
+export const SAMPLE_STATUS_COLORS: Record<SampleCollectionStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  collected: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+}
+
+// ─── Clinic Settings ──────────────────────────────────────────────────────
+
+export interface ClinicSettings {
+  name: string
+  tagline?: string
+  logoUrl?: string
+  addressLines: string[]
+  phone: string
+  email: string
+  gstin: string
+  state: string
+  bankName: string
+  bankAccountNumber: string
+  bankIfsc: string
+}
+
+export const DEFAULT_CLINIC_SETTINGS: ClinicSettings = {
+  name: 'Cell Tale Diagnostics',
+  tagline: 'Every cell in you tells a story',
+  addressLines: ['First Floor B-3 Industrial Estate Puducherry'],
+  phone: '8838720883',
+  email: 'celltalediagnostics@gmail.com',
+  gstin: '34HCIPS0270R1ZW',
+  state: '34-Puducherry',
+  bankName: 'City Union Bank',
+  bankAccountNumber: '510909010300011',
+  bankIfsc: 'CIUB0000678',
+}
+
+// ─── Invoices ─────────────────────────────────────────────────────────────
+
+export interface InvoiceLineItem {
+  itemName: string
+  hsnSac?: string
+  quantity: number
+  pricePerUnit: number
+  discountPercent: number
+}
+
+export interface Invoice {
+  id: string
+  invoiceNumber: number
+  date: string
+  billToName: string
+  billToContact?: string
+  lineItems: InvoiceLineItem[]
+  receivedAmount: number
+  /** Links this invoice back to the appointment/patient it bills for. Neither field existed
+   * before this refactor — invoices were previously free-standing, keyed only on billToName. */
+  appointmentId?: string
+  patientId?: string
+  isPaid?: boolean
+  paidAt?: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+// ─── Bulk Invoices ────────────────────────────────────────────────────────
+
+export interface BulkInvoiceLineItem {
+  packageId: string
+  packageName: string
+  patientCount: number
+  pricePerPatient: number
+  totalAmount: number
+}
+
+export interface BulkInvoice {
+  id: string
+  invoiceNumber: number
+  date: string
+  instituteName: string
+  lineItems: BulkInvoiceLineItem[]
+  appointmentIds: string[]
+  totalAmount: number
+  isPaid: boolean
+  paidAt?: string
+  createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 // ─── Form Data Types ──────────────────────────────────────────────────────

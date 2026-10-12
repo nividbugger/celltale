@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardContent } from '../../components/ui/Card'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
-import { createAppointment } from '../../lib/firestore'
+import { createAppointmentApi, addPackagesToAppointment, confirmAppointment, generateSamples } from '../../lib/api'
 import { usePackages } from '../../hooks/usePackages'
 import { TIME_SLOTS, type Package } from '../../types'
 import { addDays, format } from 'date-fns'
@@ -24,11 +24,9 @@ export default function BookAppointmentPage() {
   const [date, setDate] = useState('')
   const [timeSlot, setTimeSlot] = useState('')
   const [address, setAddress] = useState(userProfile?.address ?? '')
-  const [mapsLink, setMapsLink] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false)
   const { executeRecaptcha } = useGoogleReCaptcha()
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -36,48 +34,40 @@ export default function BookAppointmentPage() {
 
   const handleConfirm = useCallback(async () => {
     if (!userProfile || !selectedPackage) return
-    
+    if (!executeRecaptcha) {
+      setError('reCAPTCHA not ready. Please try again.')
+      return
+    }
     setLoading(true)
     setError('')
-    
-    // Try reCAPTCHA if available, but don't block booking if it fails
-    if (executeRecaptcha) {
-      try {
-        await executeRecaptcha('book_appointment')
-      } catch (err) {
-        console.warn('reCAPTCHA verification failed, proceeding anyway:', err)
-      }
-    } else {
-      console.warn('reCAPTCHA not loaded, proceeding without verification')
-    }
-    
     try {
-      await createAppointment({
+      await executeRecaptcha('book_appointment')
+    } catch {
+      setLoading(false)
+      setError('CAPTCHA verification failed. Please try again.')
+      return
+    }
+    try {
+      const appt = await createAppointmentApi({
         patientId: userProfile.uid,
-        patientName: userProfile.name,
-        patientPhone: userProfile.phone,
-        packageId: selectedPackage.id,
-        packageName: selectedPackage.name,
-        packagePrice: selectedPackage.price,
         date,
         timeSlot,
         collectionAddress: address,
-        status: 'Pending',
-        ...(mapsLink ? { mapsLink } : {}),
         ...(notes ? { notes } : {}),
       })
-      setShowSuccessMessage(true)
-      // Navigate to appointments after 3 seconds
-      setTimeout(() => {
-        navigate('/dashboard/appointments')
-      }, 3000)
+      // Same call sequence the admin walk-in flow uses (create -> select -> confirm ->
+      // generate-samples) — patient and admin bookings share one code path end to end.
+      await addPackagesToAppointment(appt.id, [selectedPackage.id])
+      await confirmAppointment(appt.id)
+      await generateSamples(appt.id)
+      navigate('/dashboard/appointments')
     } catch (e: unknown) {
       const msg = (e as { message?: string }).message ?? 'Unknown error'
       setError(`Booking failed: ${msg}`)
     } finally {
       setLoading(false)
     }
-  }, [executeRecaptcha, userProfile, selectedPackage, date, timeSlot, address, mapsLink, notes, navigate])
+  }, [executeRecaptcha, userProfile, selectedPackage, date, timeSlot, address, notes, navigate])
 
   const canProceedStep1 = selectedPackage !== null
   const canProceedStep2 = date && timeSlot && address.trim().length > 5
@@ -128,6 +118,8 @@ export default function BookAppointmentPage() {
             <div className="grid grid-cols-1 gap-3">
               {pkgsLoading ? (
                 <LoadingSpinner className="py-8" />
+              ) : packages.length === 0 ? (
+                <p className="text-slate-500 text-sm py-8 text-center">No packages are currently available. Please contact the clinic.</p>
               ) : packages.map((pkg) => (
                 <div
                   key={pkg.id}
@@ -182,13 +174,7 @@ export default function BookAppointmentPage() {
                 value={date}
                 min={today}
                 max={maxDate}
-                onChange={(e) => {
-                  const selectedDate = e.target.value
-                  // Only allow current or future dates
-                  if (selectedDate >= today) {
-                    setDate(selectedDate)
-                  }
-                }}
+                onChange={(e) => setDate(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -226,22 +212,6 @@ export default function BookAppointmentPage() {
                 placeholder="Enter your full address including flat/house no, street, city, pincode"
                 className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
               />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1">
-                Maps Link (optional)
-              </label>
-              <input
-                type="url"
-                value={mapsLink}
-                onChange={(e) => setMapsLink(e.target.value)}
-                placeholder="https://maps.google.com/..."
-                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                Share your location link for accurate sample collection
-              </p>
             </div>
 
             <div>
@@ -304,19 +274,6 @@ export default function BookAppointmentPage() {
                     <p className="text-xs text-slate-500">Address</p>
                     <p className="font-medium text-slate-900 text-sm">{address}</p>
                   </div>
-                  {mapsLink && (
-                    <div className="col-span-2">
-                      <p className="text-xs text-slate-500">Maps Link</p>
-                      <a
-                        href={mapsLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-teal-600 text-sm hover:underline"
-                      >
-                        View Location
-                      </a>
-                    </div>
-                  )}
                   {notes && (
                     <div className="col-span-2">
                       <p className="text-xs text-slate-500">Notes</p>
@@ -333,15 +290,6 @@ export default function BookAppointmentPage() {
               </div>
             )}
 
-            {showSuccessMessage && (
-              <div className="bg-green-50 border border-green-200 text-green-800 text-sm rounded-xl px-4 py-3 space-y-2">
-                <p className="font-semibold">✓ Booking Request Submitted!</p>
-                <p>
-                  Our team will reach out to you shortly to confirm your appointment and sample collection details.
-                </p>
-              </div>
-            )}
-
             <div className="flex gap-3">
               <Button
                 variant="outline"
@@ -351,14 +299,8 @@ export default function BookAppointmentPage() {
               >
                 <ChevronLeft className="mr-2 h-4 w-4" /> Back
               </Button>
-              <Button
-                size="lg"
-                className="flex-1"
-                loading={loading}
-                onClick={handleConfirm}
-                disabled={showSuccessMessage}
-              >
-                {showSuccessMessage ? 'Booking Submitted' : 'Confirm Booking'}
+              <Button size="lg" className="flex-1" loading={loading} onClick={handleConfirm}>
+                Confirm Booking
               </Button>
             </div>
           </div>

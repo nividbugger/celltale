@@ -19,4 +19,4 @@ import { app } from './app'
 // ─── Export ───────────────────────────────────────────────────────────────────
 // CORS is handled entirely by the Express cors() middleware below; set to false
 // here so Firebase does not add its own permissive headers on top.
-export const api = onRequest({ cors: false }, app)
+export const api = onRequest({ cors: false, secrets: ['LIS_API_KEY'] }, app)

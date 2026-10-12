@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin'
 import * as functions from 'firebase-functions'
 import { sendEmail } from '../email/sendEmail'
 import { reminderTemplate, type AppointmentEmailData } from '../email/templates'
+import { describePackages } from '../appointmentDisplay'
 import { config } from '../config'
 
 /**
@@ -84,8 +85,8 @@ export const sendReminders = onSchedule(
 
       const templateData: AppointmentEmailData = {
         patientName: appt.patientName,
-        packageName: appt.packageName,
-        packagePrice: appt.packagePrice,
+        packageName: describePackages(appt),
+        packagePrice: appt.totalCost ?? appt.packagePrice ?? 0,
         date: appt.date,
         timeSlot: appt.timeSlot,
         collectionAddress: appt.collectionAddress,

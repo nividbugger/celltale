@@ -5,6 +5,14 @@ import rateLimit from 'express-rate-limit'
 import { config } from './config'
 import emailRouter from './routes/email'
 import paymentsRouter from './routes/payments'
+import adminPatientsRouter from './routes/adminPatients'
+import adminTestsRouter from './routes/adminTests'
+import adminParametersRouter from './routes/adminParameters'
+import adminInvoicesRouter from './routes/adminInvoices'
+import adminBulkInvoicesRouter from './routes/adminBulkInvoices'
+import appointmentsRouter from './routes/appointments'
+import samplesRouter from './routes/samples'
+import lisOrdersRouter from './routes/lisOrders'
 
 export const app = express()
 
@@ -23,14 +31,14 @@ app.use(helmet())
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow server-to-server calls (no origin header) in the Functions runtime.
-      if (!origin || config.allowedOrigins.includes(origin)) {
+      // Allow server-to-server calls (no origin header) and any localhost port in dev.
+      if (!origin || config.allowedOrigins.includes(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin)) {
         callback(null, true)
       } else {
         callback(new Error(`CORS: origin '${origin}' not allowed`))
       }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Authorization', 'Content-Type'],
     credentials: true,
     maxAge: 3600,
@@ -53,6 +61,8 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
+  // The Functions emulator doesn't set req.ip; skip rate-limiting locally.
+  skip: () => process.env.FUNCTIONS_EMULATOR === 'true',
 })
 app.use(globalLimiter)
 
@@ -61,6 +71,14 @@ app.use(globalLimiter)
 //   { "source": "/api/**", "function": "api" }
 app.use('/api/email', emailRouter)
 app.use('/api/payments', paymentsRouter)
+app.use('/api/admin/patients', adminPatientsRouter)
+app.use('/api/admin/tests', adminTestsRouter)
+app.use('/api/admin/parameters', adminParametersRouter)
+app.use('/api/admin/invoices', adminInvoicesRouter)
+app.use('/api/admin/bulk-invoices', adminBulkInvoicesRouter)
+app.use('/api/appointments', appointmentsRouter)
+app.use('/api/samples', samplesRouter)
+app.use('/api/lis', lisOrdersRouter)
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

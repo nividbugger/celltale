@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import {
-  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save, RotateCcw
+  Plus, Trash2, Pencil, ArrowUp, ArrowDown, PackageOpen, Save,
 } from 'lucide-react'
 import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
@@ -11,9 +11,10 @@ import { Card, CardContent } from '../../components/ui/Card'
 import { Modal } from '../../components/ui/Modal'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 import { useAuth } from '../../contexts/AuthContext'
-import { getAllPackages, savePackage, deletePackage, reorderPackages } from '../../lib/firestore'
-import { PACKAGES as STATIC_PACKAGES } from '../../types'
-import type { Package, PackageDetail } from '../../types'
+import { getAllPackages, savePackage, deletePackage, reorderPackages, getActiveTests } from '../../lib/firestore'
+import { TestPicker } from '../../components/admin/TestPicker'
+import type { Package, PackageDetail, PackageSampleGroup, Test } from '../../types'
+import { TUBE_COLORS, PRIMARY_TUBE_COLORS, EXTRA_TUBE_COLORS } from '../../lib/tubeColors'
 
 // ─── Style presets ──────────────────────────────────────────────────────────
 
@@ -53,49 +54,67 @@ const COLOR_PRESETS = [
 // ─── Form types ─────────────────────────────────────────────────────────────
 
 interface PackageFormData {
-  id: string
   name: string
   price: number
-  testCount: number
   isPopular: boolean
   colorPreset: number
-  consultations: string
   summary: { value: string }[]
-  details: PackageDetail[]
+  testIds: string[]
+}
+
+/** Mirrors `generateTestId()` in `api/src/routes/adminTests.ts` — packages are internal
+ * database keys, not something an admin should be typing by hand (free-text IDs risk typos,
+ * accidental collisions, and non-URL-safe characters with no real benefit over a generated
+ * one, since nothing downstream needs a human-readable package ID). */
+function generatePackageId(): string {
+  return `PKG-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
 }
 
 function toFormData(pkg: Package, presetIdx: number): PackageFormData {
   return {
-    id: pkg.id,
     name: pkg.name,
     price: pkg.price,
-    testCount: pkg.testCount,
     isPopular: pkg.isPopular,
     colorPreset: presetIdx,
-    consultations: pkg.consultations.join(', '),
     summary: pkg.summary.map((v) => ({ value: v })),
-    details: pkg.details,
+    testIds: pkg.testIds ?? [],
   }
 }
 
-function fromFormData(data: PackageFormData, order: number): Package {
+function computeTestCount(testIds: string[], allTests: Test[]): number {
+  return testIds.reduce(
+    (sum, id) => sum + (allTests.find((t) => t.id === id)?.parameters.length ?? 0),
+    0,
+  )
+}
+
+function computeSuggestedPrice(testIds: string[], allTests: Test[]): number {
+  return testIds.reduce((sum, id) => sum + (allTests.find((t) => t.id === id)?.cost ?? 0), 0)
+}
+
+function fromFormData(
+  id: string,
+  data: PackageFormData,
+  order: number,
+  allTests: Test[],
+  existingDetails: PackageDetail[],
+  sampleGroups: PackageSampleGroup[],
+): Package {
   const preset = COLOR_PRESETS[data.colorPreset] ?? COLOR_PRESETS[0]
   return {
-    id: data.id.trim().toLowerCase().replace(/\s+/g, '-'),
+    id,
     name: data.name,
     price: Number(data.price),
-    testCount: Number(data.testCount),
+    testCount: computeTestCount(data.testIds, allTests),
     isPopular: data.isPopular,
     order,
     color: preset.color,
     headerColor: preset.headerColor,
     buttonColor: preset.buttonColor,
-    consultations: data.consultations
-      .split(',')
-      .map((c) => c.trim())
-      .filter(Boolean),
     summary: data.summary.map((s) => s.value).filter(Boolean),
-    details: data.details.filter((d) => d.category && d.text),
+    details: existingDetails,
+    testIds: data.testIds,
+    ...(sampleGroups.length > 0 ? { sampleGroups } : {}),
   }
 }
 
@@ -105,39 +124,57 @@ function detectPreset(pkg: Package): number {
 
 // ─── Package Form (inside Modal) ────────────────────────────────────────────
 
+/** Build testId → color-name map from saved sampleGroups. */
+function initColorMap(sampleGroups: PackageSampleGroup[] | undefined): Record<string, string> {
+  const map: Record<string, string> = {}
+  if (sampleGroups) {
+    sampleGroups.forEach((g) => g.testIds.forEach((tid) => { map[tid] = g.label }))
+  }
+  return map
+}
+
 function PackageForm({
   pkg,
-  existingIds,
+  nextOrder,
+  allTests,
   onSave,
   onCancel,
 }: {
   pkg: Package | null
-  existingIds: string[]
+  nextOrder: number
+  allTests: Test[]
   onSave: (p: Package) => void
   onCancel: () => void
 }) {
   const isNew = pkg === null
   const presetIdx = pkg ? Math.max(0, detectPreset(pkg)) : 0
+  const priceTouched = useRef(!isNew)
+
+  // ─── Tube-colour state ─────────────────────────────────────────────────
+  const [customMode, setCustomMode] = useState<boolean>(
+    !pkg || Boolean(pkg?.sampleGroups && pkg.sampleGroups.length > 0),
+  )
+  const [testColorMap, setTestColorMap] = useState<Record<string, string>>(() =>
+    initColorMap(pkg?.sampleGroups),
+  )
 
   const {
     register,
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PackageFormData>({
     defaultValues: pkg
       ? toFormData(pkg, presetIdx)
       : {
-          id: '',
           name: '',
           price: 0,
-          testCount: 0,
           isPopular: false,
           colorPreset: 0,
-          consultations: 'Doctor, Dental, Eye',
           summary: [{ value: '' }],
-          details: [{ category: '', text: '' }],
+          testIds: [],
         },
   })
 
@@ -147,42 +184,104 @@ function PackageForm({
     remove: removeSummary,
   } = useFieldArray({ control, name: 'summary' })
 
-  const {
-    fields: detailFields,
-    append: appendDetail,
-    remove: removeDetail,
-  } = useFieldArray({ control, name: 'details' })
+  const watchedTestIds = watch('testIds') ?? []
+  const suggestedPrice = computeSuggestedPrice(watchedTestIds, allTests)
+
+  useEffect(() => {
+    if (!priceTouched.current) {
+      setValue('price', suggestedPrice)
+    }
+    // Only re-run when the selected tests change — price itself is excluded on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedTestIds.join(',')])
+
+  // Sync colour map with selected tests: drop removed tests, pre-populate newly added ones.
+  useEffect(() => {
+    if (!customMode) return
+    setTestColorMap((prev) => {
+      const selected = new Set(watchedTestIds)
+      const next = { ...prev }
+      for (const id of Object.keys(next)) {
+        if (!selected.has(id)) delete next[id]
+      }
+      for (const testId of watchedTestIds) {
+        if (next[testId]) continue
+        const test = allTests.find((t) => t.id === testId)
+        const tc = test?.parameters.map((p) => p.tubeColor).find(Boolean)
+        if (tc) next[testId] = tc
+      }
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedTestIds.join(','), customMode])
+
+  const toggleCustomMode = useCallback(
+    (enabled: boolean) => {
+      setCustomMode(enabled)
+      if (!enabled) {
+        setTestColorMap({})
+      } else {
+        // Pre-populate from each test's parameter tubeColors; admin can still override.
+        setTestColorMap((prev) => {
+          const next = { ...prev }
+          for (const testId of watchedTestIds) {
+            if (next[testId]) continue  // keep existing override
+            const test = allTests.find((t) => t.id === testId)
+            const tc = test?.parameters.map((p) => p.tubeColor).find(Boolean)
+            if (tc) next[testId] = tc
+          }
+          return next
+        })
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [watchedTestIds.join(','), allTests],
+  )
+
+  const assignColor = useCallback((testId: string, colorName: string) => {
+    setTestColorMap((prev) =>
+      prev[testId] === colorName
+        ? { ...prev, [testId]: '' }   // click same colour → deselect
+        : { ...prev, [testId]: colorName },
+    )
+  }, [])
+
+  function applySuggestedPrice() {
+    setValue('price', suggestedPrice)
+    priceTouched.current = false
+  }
+
+  function computeSampleGroups(): PackageSampleGroup[] {
+    if (!customMode) return []
+    const byColor = new Map<string, string[]>()
+    for (const testId of watchedTestIds) {
+      const color = testColorMap[testId]
+      if (!color) continue
+      const list = byColor.get(color) ?? []
+      list.push(testId)
+      byColor.set(color, list)
+    }
+    // Preserve display order from TUBE_COLORS
+    return TUBE_COLORS
+      .filter((c) => byColor.has(c.name))
+      .map((c) => ({ label: c.name, testIds: byColor.get(c.name)! }))
+  }
 
   async function onSubmit(data: PackageFormData) {
-    const order = pkg?.order ?? existingIds.length
-    const result = fromFormData(data, order)
+    const order = pkg?.order ?? nextOrder
+    const id = pkg?.id ?? generatePackageId()
+    const result = fromFormData(id, data, order, allTests, pkg?.details ?? [], computeSampleGroups())
     await savePackage(result)
     onSave(result)
   }
 
   const selectedPreset = COLOR_PRESETS[watch('colorPreset')] ?? COLOR_PRESETS[0]
+  const liveTestCount = computeTestCount(watchedTestIds, allTests)
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Basic info */}
       <div className="grid grid-cols-2 gap-4">
-        {isNew && (
-          <div className="col-span-2">
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
-              Package ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              {...register('id', {
-                required: 'Required',
-                validate: (v) =>
-                  !existingIds.includes(v.toLowerCase()) || 'ID already exists',
-              })}
-              placeholder="e.g. premium"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            {errors.id && <p className="text-red-500 text-xs mt-1">{errors.id.message}</p>}
-          </div>
-        )}
         <div className="col-span-2">
           <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
             Package Name <span className="text-red-500">*</span>
@@ -199,19 +298,30 @@ function PackageForm({
           </label>
           <input
             type="number"
-            {...register('price', { required: 'Required', min: 1 })}
+            {...register('price', {
+              required: 'Required',
+              min: 1,
+              onChange: () => { priceTouched.current = true },
+            })}
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
+          {watchedTestIds.length > 0 && suggestedPrice !== Number(watch('price')) && (
+            <button
+              type="button"
+              onClick={applySuggestedPrice}
+              className="text-xs text-teal-600 hover:text-teal-800 font-medium mt-1"
+            >
+              Suggested from tests: ₹{suggestedPrice} · Use this
+            </button>
+          )}
         </div>
         <div>
           <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
             Total Tests
           </label>
-          <input
-            type="number"
-            {...register('testCount', { min: 0 })}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
+          <div className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            {liveTestCount} (recalculated from selected tests)
+          </div>
         </div>
       </div>
 
@@ -269,17 +379,166 @@ function PackageForm({
         </div>
       </div>
 
-      {/* Consultations */}
+      {/* Tests Included */}
       <div>
-        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
-          Free Consultations (comma-separated)
+        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-2">
+          Tests Included
         </label>
-        <input
-          {...register('consultations')}
-          placeholder="Doctor, Dental, Eye"
-          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+        <Controller
+          control={control}
+          name="testIds"
+          render={({ field }) => (
+            <TestPicker selectedIds={field.value} allTests={allTests} onChange={field.onChange} />
+          )}
         />
       </div>
+
+      {/* Sample Tube Colours */}
+      {watchedTestIds.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+          {/* Header + mode toggle */}
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Sample Tubes
+            </label>
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => toggleCustomMode(false)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                  !customMode
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleCustomMode(true)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                  customMode
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                By colour
+              </button>
+            </div>
+          </div>
+
+          {!customMode && (
+            <p className="text-xs text-slate-400">
+              Auto mode: all tests of the same sample type go into one tube.
+            </p>
+          )}
+
+          {customMode && (
+            <div className="space-y-3">
+              {/* Colour legend */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <span className="text-xs text-slate-500 font-medium">Primary:</span>
+                {PRIMARY_TUBE_COLORS.map((c) => (
+                  <span key={c.name} className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span className={`w-3 h-3 rounded-full ${c.dot} flex-shrink-0`} />
+                    {c.name}
+                  </span>
+                ))}
+                <span className="text-xs text-slate-400 mx-1">|</span>
+                <span className="text-xs text-slate-500 font-medium">Other:</span>
+                {EXTRA_TUBE_COLORS.map((c) => (
+                  <span key={c.name} className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span className={`w-3 h-3 rounded-full ${c.dot} flex-shrink-0`} />
+                    {c.name}
+                  </span>
+                ))}
+              </div>
+
+              {/* Per-test colour assignment */}
+              <div className="space-y-2">
+                {watchedTestIds.map((testId) => {
+                  const test = allTests.find((t) => t.id === testId)
+                  if (!test) return null
+                  const assigned = testColorMap[testId] ?? ''
+                  return (
+                    <div key={testId} className="flex items-center gap-3">
+                      <span className="flex-1 text-sm text-slate-700 min-w-0 truncate">
+                        {test.name}
+                      </span>
+                      {/* Colour buttons: 3 primary + divider + 4 extra */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {PRIMARY_TUBE_COLORS.map((c) => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            title={c.name}
+                            onClick={() => assignColor(testId, c.name)}
+                            className={`w-6 h-6 rounded-full border-2 transition-all ${c.dot} ${
+                              assigned === c.name
+                                ? `${c.border} ring-2 ${c.ring} ring-offset-1 scale-110`
+                                : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105'
+                            }`}
+                          />
+                        ))}
+                        <span className="w-px h-4 bg-slate-200 mx-1" />
+                        {EXTRA_TUBE_COLORS.map((c) => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            title={c.name}
+                            onClick={() => assignColor(testId, c.name)}
+                            className={`w-6 h-6 rounded-full border-2 transition-all ${c.dot} ${
+                              assigned === c.name
+                                ? `${c.border} ring-2 ${c.ring} ring-offset-1 scale-110`
+                                : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      {/* Selected colour badge */}
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium w-20 text-center shrink-0 ${
+                          assigned
+                            ? (TUBE_COLORS.find((c) => c.name === assigned)?.badge ?? 'bg-slate-100 text-slate-500')
+                            : 'bg-slate-100 text-slate-400 italic'
+                        }`}
+                      >
+                        {assigned || 'Auto'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Active tube summary */}
+              {(() => {
+                const groups = computeSampleGroups()
+                if (groups.length === 0) return (
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    No colour assigned — all tests will fall back to auto grouping.
+                  </p>
+                )
+                return (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {groups.map((g) => {
+                      const tc = TUBE_COLORS.find((c) => c.name === g.label)
+                      return (
+                        <span
+                          key={g.label}
+                          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium ${tc?.badge ?? 'bg-slate-100 text-slate-700'}`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${tc?.dot ?? 'bg-slate-400'}`} />
+                          {g.label}: {g.testIds.length} test{g.testIds.length !== 1 ? 's' : ''}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Summary */}
       <div>
@@ -315,47 +574,6 @@ function PackageForm({
         </div>
       </div>
 
-      {/* Details */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-            Test Details
-          </label>
-          <button
-            type="button"
-            onClick={() => appendDetail({ category: '', text: '' })}
-            className="text-xs text-teal-600 hover:text-teal-800 font-semibold flex items-center gap-1"
-          >
-            <Plus className="h-3 w-3" /> Add Row
-          </button>
-        </div>
-        <div className="space-y-3">
-          {detailFields.map((field, i) => (
-            <div key={field.id} className="flex gap-2 items-start">
-              <div className="flex-1 grid grid-cols-3 gap-2">
-                <input
-                  {...register(`details.${i}.category`)}
-                  placeholder="E.g. BLOOD-CBC (17)"
-                  className="col-span-1 rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-                <input
-                  {...register(`details.${i}.text`)}
-                  placeholder="Comma-separated test names..."
-                  className="col-span-2 rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => removeDetail(i)}
-                className="text-slate-400 hover:text-red-500 p-1 rounded-lg transition-colors mt-1"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Actions */}
       <div className="flex gap-3 pt-2 border-t border-slate-100">
         <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
@@ -376,10 +594,9 @@ export default function AdminPackagesPage() {
   const { logOut } = useAuth()
   const navigate = useNavigate()
   const [packages, setPackages] = useState<Package[]>([])
+  const [allTests, setAllTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [seeding, setSeeding] = useState(false)
-  const [seedError, setSeedError] = useState<string | null>(null)
   const [editPkg, setEditPkg] = useState<Package | 'new' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Package | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -388,8 +605,9 @@ export default function AdminPackagesPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const pkgs = await getAllPackages()
+      const [pkgs, tests] = await Promise.all([getAllPackages(), getActiveTests()])
       setPackages(pkgs)
+      setAllTests(tests)
     } catch (err: any) {
       console.error('Failed to load packages:', err)
       setLoadError(err?.message ?? 'Failed to load packages. Check Firestore rules and console.')
@@ -403,22 +621,6 @@ export default function AdminPackagesPage() {
   async function handleLogout() {
     await logOut()
     navigate('/')
-  }
-
-  async function handleSeed() {
-    setSeeding(true)
-    setSeedError(null)
-    try {
-      for (const p of STATIC_PACKAGES) {
-        await savePackage(p)
-      }
-      await load()
-    } catch (err: any) {
-      console.error('Seed failed:', err)
-      setSeedError(err?.message ?? 'Seed failed. Check Firestore rules and console.')
-    } finally {
-      setSeeding(false)
-    }
   }
 
   async function handleDelete() {
@@ -453,8 +655,6 @@ export default function AdminPackagesPage() {
     setEditPkg(null)
   }
 
-  const existingIds = packages.map((p) => p.id)
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Header */}
@@ -467,6 +667,10 @@ export default function AdminPackagesPage() {
               <a href="/admin/appointments" className="hover:text-slate-900">Appointments</a>
               <a href="/admin/patients" className="hover:text-slate-900">Patients</a>
               <span className="text-teal-600 font-semibold">Packages</span>
+              <a href="/admin/invoices" className="hover:text-slate-900">Invoices</a>
+              <a href="/admin/bulk-invoices" className="hover:text-slate-900">Bulk Invoices</a>
+              <a href="/admin/tests" className="hover:text-slate-900">Tests</a>
+              <a href="/admin/parameters" className="hover:text-slate-900">Parameters</a>
             </nav>
           </div>
           <button
@@ -490,11 +694,6 @@ export default function AdminPackagesPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            {packages.length === 0 && !loading && (
-              <Button variant="outline" size="sm" loading={seeding} onClick={handleSeed}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Seed Defaults
-              </Button>
-            )}
             <Button size="sm" onClick={() => setEditPkg('new')}>
               <Plus className="h-4 w-4 mr-1" /> Add Package
             </Button>
@@ -507,11 +706,6 @@ export default function AdminPackagesPage() {
             <strong>Load error:</strong> {loadError}
           </div>
         )}
-        {seedError && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            <strong>Seed error:</strong> {seedError}
-          </div>
-        )}
 
         {/* Package list */}
         {loading ? (
@@ -522,10 +716,10 @@ export default function AdminPackagesPage() {
               <PackageOpen className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 font-medium">No packages configured yet</p>
               <p className="text-slate-400 text-sm mt-1 mb-4">
-                Click "Seed Defaults" to load the pre-built packages, or add one manually.
+                Add your first package to make it available for booking.
               </p>
-              <Button size="sm" loading={seeding} onClick={handleSeed}>
-                <RotateCcw className="h-4 w-4 mr-1" /> Seed Defaults
+              <Button size="sm" onClick={() => setEditPkg('new')}>
+                <Plus className="h-4 w-4 mr-1" /> Add Package
               </Button>
             </CardContent>
           </Card>
@@ -615,7 +809,8 @@ export default function AdminPackagesPage() {
         {editPkg !== null && (
           <PackageForm
             pkg={editPkg === 'new' ? null : (editPkg as Package)}
-            existingIds={existingIds}
+            nextOrder={packages.length}
+            allTests={allTests}
             onSave={handleSaved}
             onCancel={() => setEditPkg(null)}
           />

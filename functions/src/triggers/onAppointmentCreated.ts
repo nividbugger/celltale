@@ -2,6 +2,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore'
 import * as admin from 'firebase-admin'
 import { sendEmail } from '../email/sendEmail'
 import { appointmentBookedTemplate, type AppointmentEmailData } from '../email/templates'
+import { describePackages } from '../appointmentDisplay'
 import { config } from '../config'
 
 /**
@@ -22,8 +23,8 @@ export const onAppointmentCreated = onDocumentCreated(
 
     const templateData: AppointmentEmailData = {
       patientName: appt.patientName,
-      packageName: appt.packageName,
-      packagePrice: appt.packagePrice,
+      packageName: describePackages(appt),
+      packagePrice: appt.totalCost ?? appt.packagePrice ?? 0,
       date: appt.date,
       timeSlot: appt.timeSlot,
       collectionAddress: appt.collectionAddress,
@@ -33,7 +34,7 @@ export const onAppointmentCreated = onDocumentCreated(
 
     await sendEmail({
       to: patientEmail,
-      subject: `Appointment Booked – ${appt.packageName} on ${appt.date}`,
+      subject: `Appointment Booked – ${templateData.packageName} on ${appt.date}`,
       html: appointmentBookedTemplate(templateData),
     })
   },

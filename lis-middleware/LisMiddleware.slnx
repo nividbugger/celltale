@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LisMiddleware.Api/LisMiddleware.Api.csproj" />
+    <Project Path="src/LisMiddleware.Astm/LisMiddleware.Astm.csproj" />
+    <Project Path="src/LisMiddleware.Core/LisMiddleware.Core.csproj" />
+    <Project Path="src/LisMiddleware.Drivers/LisMiddleware.Drivers.csproj" />
+    <Project Path="src/LisMiddleware.Queue/LisMiddleware.Queue.csproj" />
+    <Project Path="src/LisMiddleware.Service/LisMiddleware.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LisMiddleware.Astm.Tests/LisMiddleware.Astm.Tests.csproj" />
+    <Project Path="tests/LisMiddleware.Core.Tests/LisMiddleware.Core.Tests.csproj" />
+    <Project Path="tests/LisMiddleware.Drivers.Tests/LisMiddleware.Drivers.Tests.csproj" />
+  </Folder>
+</Solution>

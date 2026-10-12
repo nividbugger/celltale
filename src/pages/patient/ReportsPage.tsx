@@ -77,14 +77,16 @@ function ReportCard({ report }: { report: Report }) {
               >
                 <Eye className="h-4 w-4" /> Details
               </button>
-              <a
-                href={report.pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs font-semibold bg-slate-900 text-white px-3 py-1.5 rounded-full hover:bg-slate-800"
-              >
-                <Download className="h-3.5 w-3.5" /> PDF
-              </a>
+              {report.pdfUrl && (
+                <a
+                  href={report.pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-semibold bg-slate-900 text-white px-3 py-1.5 rounded-full hover:bg-slate-800"
+                >
+                  <Download className="h-3.5 w-3.5" /> PDF
+                </a>
+              )}
             </div>
           </div>
         </CardContent>
