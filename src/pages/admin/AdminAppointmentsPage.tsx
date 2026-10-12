@@ -417,7 +417,10 @@ function AppointmentRow({
                 </>
               )}
               {canViewReport && (
-                <IconBtn label="View Report" onClick={handleViewReport}><Eye className="h-4 w-4" /></IconBtn>
+                <>
+                  <IconBtn label="View Report" onClick={handleViewReport}><Eye className="h-4 w-4" /></IconBtn>
+                  <IconLink label="Replace Report" to={`/admin/upload-report/${appt.id}`}><Upload className="h-4 w-4" /></IconLink>
+                </>
               )}
 
               {/* Invoice */}

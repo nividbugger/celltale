@@ -195,6 +195,16 @@ export async function updateReport(
   await updateDoc(doc(db, 'reports', reportId), payload)
 }
 
+/** Replace the uploaded PDF on an existing report, keeping the same report id so
+ *  previously shared/printed QR links (/r/<id>) keep working. Bumps uploadedAt so
+ *  the report sorts as freshly updated. */
+export async function setReportPdfUrl(reportId: string, pdfUrl: string): Promise<void> {
+  await updateDoc(doc(db, 'reports', reportId), {
+    pdfUrl,
+    uploadedAt: serverTimestamp(),
+  })
+}
+
 // ─── Admin ────────────────────────────────────────────────────────────────
 
 export async function getAllPatients(): Promise<User[]> {
