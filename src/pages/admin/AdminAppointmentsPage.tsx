@@ -30,7 +30,7 @@ import { BrandLogo } from '../../components/layout/BrandLogo'
 import { Footer } from '../../components/layout/Footer'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAllAppointments } from '../../hooks/useAppointments'
-import { getReportByAppointmentId, getClinicSettings } from '../../lib/firestore'
+import { getReportsByAppointmentId, getClinicSettings } from '../../lib/firestore'
 import { describePackages, describeCost } from '../../lib/appointmentDisplay'
 import {
   confirmAppointment,
@@ -256,7 +256,7 @@ function AppointmentRow({
   const [printOpen, setPrintOpen] = useState(false)
   const [collectOpen, setCollectOpen] = useState(false)
   const [reportModalOpen, setReportModalOpen] = useState(false)
-  const [report, setReport] = useState<Report | null>(null)
+  const [reports, setReports] = useState<Report[]>([])
   const [reportLoading, setReportLoading] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editDate, setEditDate] = useState(appt.date)
@@ -292,16 +292,15 @@ function AppointmentRow({
 
   async function handleViewReport() {
     setReportModalOpen(true)
-    if (!report) {
+    if (reports.length === 0) {
       setReportLoading(true)
-      const found = await getReportByAppointmentId(appt.id)
-      setReport(found)
+      const found = await getReportsByAppointmentId(appt.id)
+      setReports(found)
       setReportLoading(false)
     }
   }
 
-  async function handlePrintReport() {
-    if (!report) return
+  async function handlePrintReport(report: Report) {
     if (report.pdfUrl) {
       window.open(report.pdfUrl, '_blank')
       return
@@ -419,7 +418,7 @@ function AppointmentRow({
               {canViewReport && (
                 <>
                   <IconBtn label="View Report" onClick={handleViewReport}><Eye className="h-4 w-4" /></IconBtn>
-                  <IconLink label="Replace Report" to={`/admin/upload-report/${appt.id}`}><Upload className="h-4 w-4" /></IconLink>
+                  <IconLink label="Add Report" to={`/admin/upload-report/${appt.id}`}><Upload className="h-4 w-4" /></IconLink>
                 </>
               )}
 
@@ -590,74 +589,90 @@ function AppointmentRow({
       <Modal isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} title="Report" size="xl">
         {reportLoading ? (
           <LoadingSpinner className="py-12" />
-        ) : !report ? (
+        ) : reports.length === 0 ? (
           <p className="text-slate-500 text-sm">No report found for this appointment.</p>
         ) : (
-          <div className="space-y-4">
-            {report.pdfUrl ? (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-6 text-center">
-                <p className="text-sm text-slate-600 mb-3">This report was uploaded as a PDF.</p>
-                <Button onClick={handlePrintReport}>
-                  <Printer className="h-4 w-4 mr-1" /> Open / Print PDF
-                </Button>
-              </div>
-            ) : (
-              <>
-                {report.summary && (
-                  <div className="bg-teal-50 border border-teal-100 rounded-2xl px-4 py-3 text-sm text-teal-800">
-                    <strong>Summary:</strong> {report.summary}
-                  </div>
-                )}
-                {report.testValues.some((t) => t.isAbnormal) && (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-red-700">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    {report.testValues.filter((t) => t.isAbnormal).length} value(s) are outside the
-                    normal range.
-                  </div>
-                )}
-                <div className="space-y-5">
-                  {Object.entries(
-                    report.testValues.reduce<Record<string, typeof report.testValues>>((acc, v) => {
-                      if (!acc[v.category]) acc[v.category] = []
-                      acc[v.category].push(v)
-                      return acc
-                    }, {}),
-                  ).map(([category, values]) => (
-                    <div key={category}>
-                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">
-                        {category}
-                      </h3>
-                      <div className="space-y-1">
-                        <div className="grid grid-cols-4 gap-2 px-3 py-1 text-xs text-slate-400 font-semibold uppercase">
-                          <span>Test</span>
-                          <span>Result</span>
-                          <span className="col-span-2">Normal Range</span>
-                        </div>
-                        {values.map((tv, i) => (
-                          <div
-                            key={i}
-                            className={`grid grid-cols-4 gap-2 py-2.5 px-3 rounded-xl text-sm ${
-                              tv.isAbnormal ? 'bg-red-50 text-red-800' : 'text-slate-700'
-                            }`}
-                          >
-                            <span className="font-medium truncate">{tv.name}</span>
-                            <span className="font-semibold">
-                              {tv.value} {tv.unit}
-                            </span>
-                            <span className="text-slate-500 col-span-2">{tv.normalRange}</span>
-                          </div>
-                        ))}
-                      </div>
+          <div className="space-y-6">
+            {reports.filter((r) => r.pdfUrl).length > 0 && (
+              <div className="space-y-2">
+                {reports
+                  .filter((r) => r.pdfUrl)
+                  .map((r, i) => (
+                    <div
+                      key={r.id}
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 flex items-center justify-between gap-3"
+                    >
+                      <p className="text-sm text-slate-600">
+                        PDF report{reports.filter((rr) => rr.pdfUrl).length > 1 ? ` #${i + 1}` : ''}
+                        {r.uploadedAt?.toDate ? ` · ${format(r.uploadedAt.toDate(), 'dd MMM yyyy, HH:mm')}` : ''}
+                      </p>
+                      <Button onClick={() => handlePrintReport(r)}>
+                        <Printer className="h-4 w-4 mr-1" /> Open / Print PDF
+                      </Button>
                     </div>
                   ))}
-                </div>
-                <div className="flex justify-end pt-2 border-t border-slate-100">
-                  <Button onClick={handlePrintReport}>
-                    <Printer className="h-4 w-4 mr-1" /> Print Report
-                  </Button>
-                </div>
-              </>
+              </div>
             )}
+
+            {reports
+              .filter((r) => !r.pdfUrl)
+              .map((report) => (
+                <div key={report.id} className="space-y-4">
+                  {report.summary && (
+                    <div className="bg-teal-50 border border-teal-100 rounded-2xl px-4 py-3 text-sm text-teal-800">
+                      <strong>Summary:</strong> {report.summary}
+                    </div>
+                  )}
+                  {report.testValues.some((t) => t.isAbnormal) && (
+                    <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-red-700">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      {report.testValues.filter((t) => t.isAbnormal).length} value(s) are outside the
+                      normal range.
+                    </div>
+                  )}
+                  <div className="space-y-5">
+                    {Object.entries(
+                      report.testValues.reduce<Record<string, typeof report.testValues>>((acc, v) => {
+                        if (!acc[v.category]) acc[v.category] = []
+                        acc[v.category].push(v)
+                        return acc
+                      }, {}),
+                    ).map(([category, values]) => (
+                      <div key={category}>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">
+                          {category}
+                        </h3>
+                        <div className="space-y-1">
+                          <div className="grid grid-cols-4 gap-2 px-3 py-1 text-xs text-slate-400 font-semibold uppercase">
+                            <span>Test</span>
+                            <span>Result</span>
+                            <span className="col-span-2">Normal Range</span>
+                          </div>
+                          {values.map((tv, i) => (
+                            <div
+                              key={i}
+                              className={`grid grid-cols-4 gap-2 py-2.5 px-3 rounded-xl text-sm ${
+                                tv.isAbnormal ? 'bg-red-50 text-red-800' : 'text-slate-700'
+                              }`}
+                            >
+                              <span className="font-medium truncate">{tv.name}</span>
+                              <span className="font-semibold">
+                                {tv.value} {tv.unit}
+                              </span>
+                              <span className="text-slate-500 col-span-2">{tv.normalRange}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end pt-2 border-t border-slate-100">
+                    <Button onClick={() => handlePrintReport(report)}>
+                      <Printer className="h-4 w-4 mr-1" /> Print Report
+                    </Button>
+                  </div>
+                </div>
+              ))}
           </div>
         )}
       </Modal>

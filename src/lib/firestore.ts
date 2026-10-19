@@ -151,10 +151,14 @@ export async function getReportById(reportId: string): Promise<Report | null> {
   return { id: snap.id, ...snap.data() } as Report
 }
 
+/** Returns the most recently uploaded/updated report for an appointment. An appointment can
+ *  now have several report docs (see getReportsByAppointmentId) — this is used only by the
+ *  structured test-value entry flow (AdminGenerateReportPage), which edits a single report. */
 export async function getReportByAppointmentId(appointmentId: string): Promise<Report | null> {
   const q = query(
     collection(db, 'reports'),
     where('appointmentId', '==', appointmentId),
+    orderBy('uploadedAt', 'desc'),
     limit(1),
   )
   const snap = await getDocs(q)
@@ -170,6 +174,7 @@ export function subscribeToReportByAppointmentId(
   const q = query(
     collection(db, 'reports'),
     where('appointmentId', '==', appointmentId),
+    orderBy('uploadedAt', 'desc'),
     limit(1),
   )
   return onSnapshot(q, (snap) => {
@@ -180,6 +185,36 @@ export function subscribeToReportByAppointmentId(
       callback({ id: d.id, ...d.data() } as Report)
     }
   })
+}
+
+/** All reports uploaded/generated for an appointment, most recent first. An appointment can
+ *  have multiple PDF reports attached over time (each its own doc, its own /r/<id> QR link). */
+export async function getReportsByAppointmentId(appointmentId: string): Promise<Report[]> {
+  const q = query(
+    collection(db, 'reports'),
+    where('appointmentId', '==', appointmentId),
+    orderBy('uploadedAt', 'desc'),
+  )
+  const snap = await getDocs(q)
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Report)
+}
+
+export function subscribeToReportsByAppointmentId(
+  appointmentId: string,
+  callback: (reports: Report[]) => void,
+): () => void {
+  const q = query(
+    collection(db, 'reports'),
+    where('appointmentId', '==', appointmentId),
+    orderBy('uploadedAt', 'desc'),
+  )
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Report))
+  })
+}
+
+export async function deleteReport(reportId: string): Promise<void> {
+  await deleteDoc(doc(db, 'reports', reportId))
 }
 
 export async function updateReport(
@@ -193,16 +228,6 @@ export async function updateReport(
   if (data.summary !== undefined) payload.summary = data.summary
   if (data.testIds) payload.testIds = data.testIds
   await updateDoc(doc(db, 'reports', reportId), payload)
-}
-
-/** Replace the uploaded PDF on an existing report, keeping the same report id so
- *  previously shared/printed QR links (/r/<id>) keep working. Bumps uploadedAt so
- *  the report sorts as freshly updated. */
-export async function setReportPdfUrl(reportId: string, pdfUrl: string): Promise<void> {
-  await updateDoc(doc(db, 'reports', reportId), {
-    pdfUrl,
-    uploadedAt: serverTimestamp(),
-  })
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────
